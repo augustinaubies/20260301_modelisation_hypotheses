@@ -21,7 +21,8 @@ Principe :
 
 ## 0) Setup minimal
 
-[] Utiliser le notebook `notebooks/01_exploration_generation.ipynb`
+[X] Utiliser le notebook `notebooks/01_exploration_generation.ipynb`
+   - Notebook reconstruit en mode exploration empirique (sans YAML/CLI), avec nettoyage, stats, ACF et VAR(1).
 
 ---
 
@@ -29,30 +30,39 @@ Principe :
 
 Variables cibles (mensuelles de préférence) :
 
-[] Inflation (CPI France / zone euro)
+[X] Inflation (CPI France / zone euro)
+   - Implémenté en V0 avec le CPI de la source macro S&P (proxy US) pour lancer l'analyse statistique.
 [] Croissance salaire nominal (si dispo mensuel, sinon proxy)
 [] Indice loyers (IRL)
 [] Prix immobilier (indice national)
-[] Rendement actions (MSCI World ou S&P 500)
-[] Taux crédit immobilier
+[X] Rendement actions (MSCI World ou S&P 500)
+   - S&P 500 utilisé, transformé en log-return mensuel.
+[X] Taux crédit immobilier
+   - Proxy initial via `Long Interest Rate` mensuel (donnée historique longue).
+[] Ajouter une source complémentaire pour couvrir les variables manquantes (salaire nominal, IRL, prix immobilier) en fréquence mensuelle
 
 ---
 
 ## 2) Collecte des données
 
-[] Identifier source fiable (INSEE, Banque de France, FRED, etc.)
-[] Télécharger données historiques longues (≥ 20 ans si possible)
-[] Sauvegarder brut en `data/raw/`
-[] Documenter la source (URL + date extraction)
+[X] Identifier source fiable (INSEE, Banque de France, FRED, etc.)
+   - Source retenue pour V0: dataset public versionné `datasets/s-and-p-500` (GitHub).
+[X] Télécharger données historiques longues (≥ 20 ans si possible)
+   - Historique disponible sur plus de 100 ans dans le fichier récupéré.
+[X] Sauvegarder brut en `data/raw/`
+   - Fichier `data/raw/s_and_p_500.csv` ajouté.
+[X] Documenter la source (URL + date extraction)
+   - Documentation ajoutée dans `data/raw/SOURCES.md`.
 
 ---
 
 ## 3) Nettoyage & normalisation
 
-[] Mettre toutes les séries au même pas temporel (mensuel)
-[] Aligner sur un index commun
-[] Gérer trous / NaN (drop ou interpolation justifiée)
-[] Transformer en variables modélisables :
+[X] Mettre toutes les séries au même pas temporel (mensuel)
+[X] Aligner sur un index commun
+[X] Gérer trous / NaN (drop ou interpolation justifiée)
+   - NaN gérés par `dropna()` après transformations.
+[X] Transformer en variables modélisables :
    - Inflation → taux mensuel
    - Prix immo → log-return
    - Bourse → log-return
@@ -64,18 +74,18 @@ Variables cibles (mensuelles de préférence) :
 
 Pour chaque variable :
 
-[] Moyenne
-[] Volatilité
-[] Histogramme
-[] Kurtosis / skewness
-[] Test stationnarité (ADF)
+[X] Moyenne
+[X] Volatilité
+[X] Histogramme
+[X] Kurtosis / skewness
+[X] Test stationnarité (ADF)
 
 Pour le système complet :
 
-[] Matrice de corrélation
-[] Autocorrélations (ACF)
-[] Corrélations croisées (cross-corr)
-[] Visualisation rolling mean / rolling vol
+[X] Matrice de corrélation
+[X] Autocorrélations (ACF)
+[X] Corrélations croisées (cross-corr)
+[X] Visualisation rolling mean / rolling vol
 
 ---
 
@@ -83,11 +93,12 @@ Pour le système complet :
 
 Questions à répondre (écrire conclusions dans le notebook) :
 
-[] Les séries sont-elles stationnaires ?
-[] Faut-il modéliser les niveaux ou les variations ?
-[] Les corrélations sont-elles stables dans le temps ?
-[] Y a-t-il une forte persistance (AR(1) élevé) ?
-[] Y a-t-il des régimes évidents (inflation haute / basse) ?
+[X] Les séries sont-elles stationnaires ?
+[X] Faut-il modéliser les niveaux ou les variations ?
+[X] Les corrélations sont-elles stables dans le temps ?
+[X] Y a-t-il une forte persistance (AR(1) élevé) ?
+[X] Y a-t-il des régimes évidents (inflation haute / basse) ?
+   - Indice préliminaire via rolling stats; validation régime à confirmer après ajout des variables manquantes.
 
 ---
 
@@ -95,10 +106,10 @@ Questions à répondre (écrire conclusions dans le notebook) :
 
 Sans framework complexe :
 
-[] Estimer un VAR(1) via statsmodels
-[] Vérifier stabilité (valeurs propres)
-[] Simuler une trajectoire
-[] Comparer stats simulées vs stats historiques
+[X] Estimer un VAR(1) via statsmodels
+[X] Vérifier stabilité (valeurs propres)
+[X] Simuler une trajectoire
+[X] Comparer stats simulées vs stats historiques
 
 ---
 
