@@ -1,0 +1,20 @@
+# Paramètres d'exemple modèle statique corrélé (V1)
+version_schema: 1
+type_modele: statique
+pas_temps: mensuel
+variables:
+  - inflation
+  - croissance_salaire
+  - indexation_loyers
+  - revalorisation_immobiliere
+  - rendement_bourse
+  - taux_credit
+moyennes: [0.0018, 0.0021, 0.0017, 0.0020, 0.0050, 0.0002]
+volatilites: [0.0015, 0.0012, 0.0010, 0.0035, 0.0350, 0.0025]
+correlation:
+  - [1.00, 0.65, 0.70, 0.35, 0.10, 0.25]
+  - [0.65, 1.00, 0.60, 0.30, 0.15, 0.20]
+  - [0.70, 0.60, 1.00, 0.40, 0.05, 0.30]
+  - [0.35, 0.30, 0.40, 1.00, 0.25, -0.10]
+  - [0.10, 0.15, 0.05, 0.25, 1.00, -0.30]
+  - [0.25, 0.20, 0.30, -0.10, -0.30, 1.00]

@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "modelisation-macro"
+version = "0.1.0"
+description = "Sous-projet de modélisation macro et génération de trajectoires temporelles"
+readme = "README_PROJET.md"
+requires-python = ">=3.12"
+dependencies = [
+  "numpy>=1.26",
+  "pandas>=2.2",
+  "pydantic>=2.6",
+  "pyyaml>=6.0",
+  "matplotlib>=3.8",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.0",
+  "jupyter>=1.0",
+]
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
