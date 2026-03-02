@@ -33,12 +33,14 @@ Variables cibles (mensuelles de préférence) :
 [X] Inflation (CPI France / zone euro)
    - Implémenté en V0 avec le CPI de la source macro S&P (proxy US) pour lancer l'analyse statistique.
 [] Croissance salaire nominal (si dispo mensuel, sinon proxy)
+   - On pourrait peut être partir sur un facteur multiplicateur de l'inflation, disons 1.5.
 [] Indice loyers (IRL)
 [] Prix immobilier (indice national)
 [X] Rendement actions (MSCI World ou S&P 500)
    - S&P 500 utilisé, transformé en log-return mensuel.
-[X] Taux crédit immobilier
+[] Taux crédit immobilier
    - Proxy initial via `Long Interest Rate` mensuel (donnée historique longue).
+   - Attention il faut prendre celui en France car on applique les données Françaises.
 [] Ajouter une source complémentaire pour couvrir les variables manquantes (salaire nominal, IRL, prix immobilier) en fréquence mensuelle
 
 ---
