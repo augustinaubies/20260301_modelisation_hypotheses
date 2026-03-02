@@ -115,17 +115,71 @@ Sans framework complexe :
 
 ---
 
-## 7) Décision structurante (à la fin seulement)
+[] Corriger transformation inflation
+    [] Vérifier si `Consumer Price Index` est un niveau ou déjà une variation
+    [] Si déjà variation : supprimer `pct_change()`
+    [] Sinon : remplacer par vraie série CPI niveau
+    [] Recalculer statistiques inflation (moyenne, vol, skew, kurtosis, ADF)
 
-Après exploration :
+[] Remplacer source inflation par CPI niveau réel (France ou US cohérent avec S&P)
+    [] Identifier source officielle fiable (INSEE / FRED)
+    [] Télécharger série longue ≥ 30 ans
+    [] Documenter source dans `data/raw/SOURCES.md`
+    [] Mettre à jour notebook avec nouvelle série
 
-[] Décider si :
-   - Modèle statique corrélé suffit
-   - VAR(1) suffit
-   - Modèle à régimes nécessaire
-   - Copule nécessaire
-[] Décider quelles variables garder / retirer
-[] Décider transformation finale canonique (log-return ou croissance simple)
+[] Corriger modélisation taux_credit
+    [] Tester stationnarité du niveau
+    [] Calculer `delta_taux_credit = diff(taux_credit)`
+    [] Tester stationnarité de la variation
+    [] Comparer VAR niveau vs VAR en différences
+    [] Décider variable canonique (niveau ou variation)
+
+[] Refaire estimation VAR(1) avec données corrigées
+    [] Vérifier stabilité (racines)
+    [] Vérifier significativité coefficients
+    [] Comparer stats simulées vs historiques
+
+[] Tester normalité résidus VAR
+    [] Jarque-Bera par équation
+    [] Inspecter kurtosis résidus
+    [] Décider si hypothèse gaussienne acceptable
+
+[] Tester cointégration inflation / taux_credit
+    [] Test de Johansen
+    [] Décider VAR vs VECM
+
+[] Analyser stabilité temporelle des corrélations
+    [] Rolling corr 60 mois
+    [] Identifier ruptures visibles (ex : post 2000, post 2008)
+
+[] Vérifier présence d’hétéroscédasticité
+    [] Rolling volatilité
+    [] Test ARCH sur résidus actions
+
+[] Décider transformations finales canoniques
+    [] Inflation : variation simple ou log ?
+    [] Actions : log-return confirmé ?
+    [] Taux crédit : niveau ou variation ?
+    [] Documenter choix dans notebook
+
+[] Ajouter variable manquantes
+    [] Croissance salaire nominal (source mensuelle ou proxy)
+    [] Indice loyers (IRL)
+    [] Prix immobilier national
+    [] Harmoniser fréquence mensuelle
+
+[] Refaire analyse complète avec système élargi (≥ 5 variables)
+    [] Stats descriptives
+    [] Corrélations
+    [] ACF
+    [] VAR(1)
+    [] Diagnostic résidus
+
+[] Décision modèle V1
+    [] Statique corrélé suffisant ?
+    [] VAR(1) retenu ?
+    [] Régimes nécessaires ?
+    [] Copule nécessaire ?
 
 ---
 
@@ -137,17 +191,3 @@ Ne pas écrire :
 - système d’export
 - code propre moteur
 
-tant que les points 1 → 6 ne sont pas validés.
-
----
-
-But final de cette phase :
-Avoir une compréhension empirique solide avant toute architecture.
-[] Rédiger une “note d’intégration” (pas de code) pour l'intégration à la simulation en aval
-    [] Stratégie Monte Carlo aval :
-        - tirer paramètres (statique/VAR) puis générer trajectoire
-        - ou tirer directement la trajectoire
-    [] Question utilisateur : modèle de taux de crédit aval ?
-    - Taux fixé à la date de signature du prêt (recommandé) vs taux variable pendant le prêt (plus complexe). Réponse : taux fixe
-
----
