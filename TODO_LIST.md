@@ -32,8 +32,8 @@ Variables cibles (mensuelles de préférence) :
 
 [X] Inflation (CPI France / zone euro)
    - Implémenté en V0 avec le CPI de la source macro S&P (proxy US) pour lancer l'analyse statistique.
-[] Croissance salaire nominal (si dispo mensuel, sinon proxy)
-   - On pourrait peut être partir sur un facteur multiplicateur de l'inflation, disons 1.5.
+[X] Croissance salaire nominal (si dispo mensuel, sinon proxy)
+   - Proxy V0.1 implémenté dans le notebook : `croissance_salaire_nominal_proxy = 1.5 * inflation` pour avancer sur l'analyse dynamique multivariée.
 [] Indice loyers (IRL)
 [] Prix immobilier (indice national)
 [X] Rendement actions (MSCI World ou S&P 500)
