@@ -460,6 +460,7 @@ def construire_figure_rejeu(
             )
 
         moyenne = simulations_niveaux.mean(axis=0)
+        mediane = np.median(simulations_niveaux, axis=0)
         q_bas = np.quantile(simulations_niveaux, 0.025, axis=0)
         q_haut = np.quantile(simulations_niveaux, 0.975, axis=0)
 
@@ -509,6 +510,19 @@ def construire_figure_rejeu(
                 mode="lines",
                 line=dict(color=couleur, width=2),
                 name=f"{nom_modele} - moyenne",
+                legendgroup=nom_modele,
+                showlegend=False,
+            ),
+            row=2,
+            col=1,
+        )
+        fig.add_trace(
+            go.Scatter(
+                x=x,
+                y=mediane,
+                mode="lines",
+                line=dict(color=couleur, width=2, dash="dash"),
+                name=f"{nom_modele} - médiane",
                 legendgroup=nom_modele,
                 showlegend=False,
             ),

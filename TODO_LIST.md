@@ -157,7 +157,9 @@ TACHE 2 : Modélisation indépendante de la bourse.
       - Score corrigé pour être cohérent avec les graphes: métriques standardisées + RMSE relatif en niveaux + pénalité de couverture 95%; le biais qui favorisait `student_t_iid` malgré des courbes aberrantes est levé.
    [X] Il faudrait afficher les courbes finales avec comme point de départ la meilleure date de départ identifiée précédemmment.
       - Le rejeu final est désormais recalé sur la fenêtre optimale détectée (date de départ glissante), et le HTML explicite la plage affichée.
-   [] Fais en sorte d'afficher la médiane dans sur la deuxième courbe du rapport. Elle devrait apparaitre en pointillés, de la même couleur que les dispersions.
+   [X] Fais en sorte d'afficher la médiane dans sur la deuxième courbe du rapport. Elle devrait apparaitre en pointillés, de la même couleur que les dispersions.
+      - Ajout de la médiane (pointillés, couleur du modèle) sur le sous-graphe distribution temporelle du rapport Plotly.
+   [] Il faut ajouter une nouvelle courbe tout en bas du compte rendu HTML : une courbe de distribution des variations mensuelles pour chaque stratégie et pour l'historique également. Il faut que les stratégies aient la même couleur que sur les graphes précédents. Toujours en plotly sombre. Pour chaque stratégie, on prend tous les tirages MC tous les mois, et on trace la densité de probabilité des variations, afin d'observer laquelle reproduit le mieux la loi de probabilité historique.
 
 TACHE 3 : 
 
