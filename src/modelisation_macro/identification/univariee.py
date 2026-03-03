@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-
 import numpy as np
 import pandas as pd
 import plotly.express as px
@@ -267,6 +266,82 @@ def comparer_strategies(
     return resultats, meilleur_modele, simulations_par_modele
 
 
+def _score_fidelite_depuis_simulations(simulations: np.ndarray, metriques_hist: dict[str, float]) -> float:
+    metriques_sims = pd.DataFrame([calculer_metriques(path) for path in simulations])
+    ecarts = {
+        metrique: float(abs(metriques_sims[metrique].mean() - valeur_hist))
+        for metrique, valeur_hist in metriques_hist.items()
+    }
+    return float(np.mean(list(ecarts.values())))
+
+
+def _simuler_pour_modele(
+    nom_modele: str,
+    serie_historique: pd.Series,
+    n_periodes: int,
+    n_paths: int,
+    seed: int | None,
+) -> np.ndarray:
+    if nom_modele == "gaussien_iid":
+        return ModeleGaussienIID.calibrer(serie_historique).simuler(n_periodes=n_periodes, n_paths=n_paths, seed=seed)
+
+    if nom_modele == "ar1_bruit_colore":
+        return ModeleAR1.calibrer(serie_historique).simuler(
+            n_periodes=n_periodes,
+            n_paths=n_paths,
+            x0=float(serie_historique.iloc[0]),
+            seed=seed,
+        )
+
+    if nom_modele == "student_t_iid":
+        return ModeleStudentTIID.calibrer(serie_historique).simuler(n_periodes=n_periodes, n_paths=n_paths, seed=seed)
+
+    if nom_modele == "volatilite_ewma":
+        return ModeleVolatiliteEWMA.calibrer(serie_historique).simuler(n_periodes=n_periodes, n_paths=n_paths, seed=seed)
+
+    if nom_modele == "markov_switching_2_regimes":
+        return ModeleMarkovSwitching.calibrer(serie_historique).simuler(n_periodes=n_periodes, n_paths=n_paths, seed=seed)
+
+    raise ValueError(f"Modèle inconnu pour simulation: {nom_modele}")
+
+
+def detecter_meilleure_date_depart(
+    serie_historique: pd.Series,
+    modele_a_tester: str = "volatilite_ewma",
+    fenetre_min_mois: int = 60,
+    pas_mois: int = 6,
+    n_paths: int = 120,
+    seed: int | None = 42,
+) -> tuple[pd.DataFrame, pd.Timestamp]:
+    if len(serie_historique) < fenetre_min_mois:
+        raise ValueError("Série trop courte pour la détection de date de départ.")
+
+    candidats: list[dict[str, float | pd.Timestamp | int]] = []
+    for start_idx in range(0, len(serie_historique) - fenetre_min_mois + 1, pas_mois):
+        fenetre = serie_historique.iloc[start_idx:]
+        n_periodes = len(fenetre)
+        metriques_hist = calculer_metriques(fenetre.to_numpy())
+        simulations = _simuler_pour_modele(
+            nom_modele=modele_a_tester,
+            serie_historique=fenetre,
+            n_periodes=n_periodes,
+            n_paths=n_paths,
+            seed=None if seed is None else seed + start_idx,
+        )
+        score = _score_fidelite_depuis_simulations(simulations=simulations, metriques_hist=metriques_hist)
+        candidats.append(
+            {
+                "date_depart": fenetre.index[0],
+                "score_fidelite": score,
+                "n_observations": n_periodes,
+            }
+        )
+
+    resultats = pd.DataFrame(candidats).sort_values("score_fidelite", ascending=True).reset_index(drop=True)
+    meilleure_date = pd.Timestamp(resultats.loc[0, "date_depart"])
+    return resultats, meilleure_date
+
+
 
 
 def _hex_vers_rgba(couleur_hex: str, alpha: float) -> str | None:
@@ -401,14 +476,25 @@ def construire_figure_rejeu(
         title="Comparaison des rejeux Monte Carlo par stratégie",
         legend_title_text="Cliquer pour activer/désactiver un modèle",
         height=900,
+        template="plotly_dark",
+        paper_bgcolor="#0f172a",
+        plot_bgcolor="#111827",
     )
     fig.update_yaxes(title_text="Indice base 100", row=1, col=1)
     fig.update_yaxes(title_text="Indice base 100", row=2, col=1)
     return fig
 
 
-def construire_html_rapport(fig: go.Figure, resultats: pd.DataFrame, meilleur_modele: str) -> str:
+def construire_html_rapport(
+    fig: go.Figure,
+    resultats: pd.DataFrame,
+    meilleur_modele: str,
+    resultats_dates: pd.DataFrame,
+    meilleure_date: pd.Timestamp,
+    modele_date: str,
+) -> str:
     tableau_html = resultats.to_html(index=False, float_format="%.6f")
+    tableau_dates_html = resultats_dates.head(10).to_html(index=False, float_format="%.6f")
     figure_html = fig.to_html(full_html=False, include_plotlyjs="cdn")
     return f"""<!DOCTYPE html>
 <html lang=\"fr\">
@@ -416,14 +502,16 @@ def construire_html_rapport(fig: go.Figure, resultats: pd.DataFrame, meilleur_mo
     <meta charset=\"utf-8\" />
     <title>Comparaison de fidélité des stratégies</title>
     <style>
-      body {{ font-family: Arial, sans-serif; margin: 24px 32px; line-height: 1.5; }}
+      body {{ font-family: Arial, sans-serif; margin: 24px 32px; line-height: 1.5; background: #0b1120; color: #e5e7eb; }}
       h1, h2 {{ margin-top: 0; }}
       section {{ margin-bottom: 28px; }}
       .plot-container {{ margin: 30px 0 36px 0; }}
       table {{ border-collapse: collapse; }}
-      th, td {{ border: 1px solid #ddd; padding: 6px 10px; }}
-      th {{ background: #f5f5f5; }}
+      th, td {{ border: 1px solid #334155; padding: 6px 10px; }}
+      th {{ background: #1e293b; }}
+      td {{ background: #0f172a; }}
       ul {{ margin-top: 8px; }}
+      a {{ color: #93c5fd; }}
     </style>
   </head>
   <body>
@@ -446,6 +534,14 @@ def construire_html_rapport(fig: go.Figure, resultats: pd.DataFrame, meilleur_mo
     <section>
       <h2>Tableau de synthèse</h2>
       {tableau_html}
+    </section>
+
+    <section>
+      <h2>Recherche de fenêtre historique plus fidèle</h2>
+      <p><b>Méthode testée :</b> {modele_date}</p>
+      <p><b>Meilleure date de départ :</b> {meilleure_date.strftime("%Y-%m-%d")}</p>
+      <p>Top 10 des dates candidates (score plus bas = meilleure fidélité) :</p>
+      {tableau_dates_html}
     </section>
 
     <section class=\"plot-container\">
@@ -475,12 +571,28 @@ def executer_pipeline_univariee(
         n_paths=n_paths,
         seed=seed,
     )
+    modele_date = "volatilite_ewma"
+    resultats_dates, meilleure_date = detecter_meilleure_date_depart(
+        serie_historique=serie,
+        modele_a_tester=modele_date,
+        fenetre_min_mois=60,
+        pas_mois=6,
+        n_paths=min(n_paths, 120),
+        seed=seed,
+    )
 
     sortie = Path(dossier_sortie)
     sortie.mkdir(parents=True, exist_ok=True)
 
     fig = construire_figure_rejeu(serie_historique=serie, simulations_par_modele=simulations)
-    rapport_html = construire_html_rapport(fig=fig, resultats=resultats, meilleur_modele=meilleur_modele)
+    rapport_html = construire_html_rapport(
+        fig=fig,
+        resultats=resultats,
+        meilleur_modele=meilleur_modele,
+        resultats_dates=resultats_dates,
+        meilleure_date=meilleure_date,
+        modele_date=modele_date,
+    )
     figure_path = sortie / "comparaison_fidelite.html"
     figure_path.write_text(rapport_html, encoding="utf-8")
 

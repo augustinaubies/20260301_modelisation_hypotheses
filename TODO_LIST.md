@@ -149,8 +149,11 @@ TACHE 2 : Modélisation indépendante de la bourse.
       - Figure refondue en 2 sous-graphes: niveaux base 100 (intégrale des log-returns) puis moyenne + couloir 95% par stratégie.
    [X] Attention sur le HTML, le texte se superpose aux graphes. il faut bien espacer tout ça et organiser pour rendre le rendu joli.
       - Rapport HTML restructuré (sections séparées, CSS de marges/espacements, tableau + graphique découplés).
-   [] Toutes les distributions font exploser les rendements par rapport à l'historique, sûrement car les dynamiques du marché ont évolué. Il faudrait identifier à partir de quelle date dans le passé la méthode permet de mieux reproduire les données, quitte à faire une boucle for sur une des méthodes pour la déterminer.
-   [] Il faut mettre le dark mode sur le fichier HTML, quitte à adapter les couleurs des figures, des courbes et du texte. 
+   [X] Toutes les distributions font exploser les rendements par rapport à l'historique, sûrement car les dynamiques du marché ont évolué. Il faudrait identifier à partir de quelle date dans le passé la méthode permet de mieux reproduire les données, quitte à faire une boucle for sur une des méthodes pour la déterminer.
+      - Ajout d'une recherche de meilleure date de départ (boucle glissante) pour `volatilite_ewma`, avec synthèse Top 10 intégrée au HTML.
+   [X] Il faut mettre le dark mode sur le fichier HTML, quitte à adapter les couleurs des figures, des courbes et du texte.
+      - Rapport HTML en dark mode (CSS) + figures Plotly en thème sombre (`plotly_dark`).
+   [] Les différentes identifications produisent toujours des résultats très éloignés des données historiques. Les données historiques sont beaucoup plus faibles et sortent presque des couloirs à 95 % par le bas. Ce que je ne comprends pas, c'est qu'on dit : "Meilleur modèle selon score global : student_t_iid", sauf que c'est le plus éloigné de tous en moyenne, et l'un des pires devrait être le ar1_bruit_coloré mais ça n'est pas le cas sur les courbes. Il doit donc y avoir une erreur d'implémentation ou d'interprétation quelque part. Dans tous les cas, les identifications actuelles ne sont pas bonnes pour reproduire les données historiques, il faut donc trouver d'où vient le problème.
 
 TACHE 3 : 
 

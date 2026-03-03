@@ -5,6 +5,7 @@ import pandas as pd
 from modelisation_macro.identification.univariee import (
     calculer_metriques,
     comparer_strategies,
+    detecter_meilleure_date_depart,
     construire_figure_rejeu,
     construire_html_rapport,
 )
@@ -48,9 +49,42 @@ def test_construire_html_rapport_separe_bien_texte_et_graphiques() -> None:
     simulations = {"gaussien_iid": [[0.0, 0.01, -0.01, 0.0]]}
     fig = construire_figure_rejeu(serie_historique=serie, simulations_par_modele=simulations)
     resultats = pd.DataFrame([{"modele": "gaussien_iid", "score_fidelite": 0.1}])
+    resultats_dates = pd.DataFrame(
+        [
+            {
+                "date_depart": pd.Timestamp("2020-01-01"),
+                "score_fidelite": 0.05,
+                "n_observations": 48,
+            }
+        ]
+    )
 
-    rapport = construire_html_rapport(fig=fig, resultats=resultats, meilleur_modele="gaussien_iid")
+    rapport = construire_html_rapport(
+        fig=fig,
+        resultats=resultats,
+        meilleur_modele="gaussien_iid",
+        resultats_dates=resultats_dates,
+        meilleure_date=pd.Timestamp("2020-01-01"),
+        modele_date="volatilite_ewma",
+    )
 
     assert "<section>" in rapport
     assert "class=\"plot-container\"" in rapport
     assert "Meilleur modèle selon score global" in rapport
+    assert "Meilleure date de départ" in rapport
+
+
+def test_detecter_meilleure_date_depart_retourne_une_date_existante() -> None:
+    index = pd.date_range("2010-01-01", periods=72, freq="MS")
+    serie = pd.Series([0.002 * ((i % 6) - 2) for i in range(72)], index=index)
+
+    resultats, meilleure_date = detecter_meilleure_date_depart(
+        serie_historique=serie,
+        modele_a_tester="gaussien_iid",
+        fenetre_min_mois=60,
+        n_paths=20,
+        seed=123,
+    )
+
+    assert not resultats.empty
+    assert meilleure_date in serie.index
