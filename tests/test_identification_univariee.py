@@ -12,8 +12,15 @@ def test_calculer_metriques_retourne_cles_attendues() -> None:
 
 
 def test_comparer_strategies_retourne_modele_existant() -> None:
-    serie = pd.Series([0.01, 0.0, -0.01, 0.02, 0.01, -0.02, 0.0, 0.01])
-    resultats, meilleur_modele = comparer_strategies(serie_historique=serie, n_paths=20, seed=123)
+    serie = pd.Series([0.01, 0.0, -0.01, 0.02, 0.01, -0.02, 0.0, 0.01, 0.015, -0.005, 0.008, -0.012])
+    resultats, meilleur_modele, simulations = comparer_strategies(serie_historique=serie, n_paths=20, seed=123)
     modeles = set(resultats["modele"].tolist())
-    assert modeles == {"gaussien_iid", "ar1_bruit_colore"}
+    assert modeles == {
+        "gaussien_iid",
+        "ar1_bruit_colore",
+        "student_t_iid",
+        "volatilite_ewma",
+        "markov_switching_2_regimes",
+    }
     assert meilleur_modele in modeles
+    assert set(simulations.keys()) == modeles

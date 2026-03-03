@@ -139,9 +139,14 @@ TACHE 2 : Modélisation indépendante de la bourse.
    [X] Il faut que ce script puisse accepter d'autres indices que le S&P500, donc il ne doit pas y avoir de noms dépendant de la série étudiée, et que les scripts soient robustes à un changement de données d'entrées (supposées tout de même au même format).
    [X] Implémenter la pipeline d'identification sur cette partie...
       - Deux stratégies implémentées (gaussienne i.i.d. et AR(1) bruit coloré), comparées par rejeu Monte Carlo + score de fidélité et synthèse Plotly.
-   [] Implémenter davantage de stratégies state of the art (dont notamment une loi Student-t / régimes, log-returns + volatility model (GARCH/SV), Markov-switching (drift/vol) s'il sont pertinents, sois critique de ces propositions avant de les implémenter).
-   [] Le graphe final doit montrer une courbe temporelle avec la courbe de référence, les tirages MCs des différentes stratégies (chaque stratégie a sa couleur et la grappe de cheveleus doit pouvoir être désactivée d'un clic).
-   [] Les CSVs de sortie ne sont pas utiles s'ils ne stockent pas d'information utile. Mettre la conclusion du fichier txt, le tableau de synthèse et des CSVs dans le fichier HTML pour que toutes les sorties soient en 1 fichier (avec des dépendances s'il le faut absolument en PNG ou csv ou les données par exemple).
+   [X] Implémenter davantage de stratégies state of the art (dont notamment une loi Student-t / régimes, log-returns + volatility model (GARCH/SV), Markov-switching (drift/vol) s'il sont pertinents, sois critique de ces propositions avant de les implémenter).
+      - Ajout des stratégies `student_t_iid`, `volatilite_ewma` (proxy GARCH léger) et `markov_switching_2_regimes` + commentaire critique intégré au rapport HTML.
+   [X] Le graphe final doit montrer une courbe temporelle avec la courbe de référence, les tirages MCs des différentes stratégies (chaque stratégie a sa couleur et la grappe de cheveleus doit pouvoir être désactivée d'un clic).
+      - Figure Plotly convertie en rejeu temporel multi-modèles avec légende interactive par stratégie.
+   [X] Les CSVs de sortie ne sont pas utiles s'ils ne stockent pas d'information utile. Mettre la conclusion du fichier txt, le tableau de synthèse et des CSVs dans le fichier HTML pour que toutes les sorties soient en 1 fichier (avec des dépendances s'il le faut absolument en PNG ou csv ou les données par exemple).
+      - Sortie unifiée dans `comparaison_fidelite.html` (synthèse, conclusion, tableau et visualisations), suppression des exports CSV/TXT redondants.
+   [] Sur le graphe final, il faut afficher les 2 courbes suivantes (remplacer les précédentes) : 1 graphe de la courbe temporelle (donc l'intégrale des variations), et un graphe affichant les distributions (moyenne et couloir à 95 pct à chaque pas de temps) de toutes les stratégies (bien sûr l'historique n'a pas d'écart type vu qu'il n'y a qu'une courbe).
+   [] Attention sur le HTML, le texte se superpose aux graphes. il faut bien espacer tout ça et organiser pour rendre le rendu joli.
 
 TACHE 3 : 
 
