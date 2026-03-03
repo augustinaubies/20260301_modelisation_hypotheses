@@ -8,20 +8,6 @@
 
 Objectif : comprendre la structure statistique réelle des variables macro avant toute industrialisation.
 
-Principe :
-- Pas de YAML.
-- Pas de CLI.
-- Pas d’architecture complexe.
-- Un notebook.
-- Des données propres.
-- Des graphiques.
-- Des stats.
-- Des analyses pertinentes et qui tranchent.
-
-Bien s'assurer que toutes les tâches en amont sont réalisées avant de passer à la suivante. Des analyses ont déjà été menées sur des données initiales, mais il faut désormais reprendre depuis le début pour traiter toutes les données simultanément.
-
----
-
 ## 0) Setup minimal
 
 [X] Utiliser le notebook `notebooks/01_exploration_generation.ipynb`
@@ -123,10 +109,35 @@ Sans framework complexe :
 
 ---
 
-## Règle importante
+Les tâches ci-dessus ont toutes été réalisées.
+Les conclusions principales de cette première partie sont les suivantes : 
+- Sur la fenêtre commune 2010-10 → 2024-02 (161 mois), les corrélations contemporaines montrent actions ≈ indépendantes de l’inflation (ρ ≈ -0.007) et une relation faible inflation↔taux (ρ ≈ -0.035).
+- L’indexation des loyers (IRL) est modérément corrélée à l’inflation (ρ ≈ 0.335) et quasi nulle avec la revalorisation immo (ρ ≈ -0.008). 
+- Le couple le plus marqué est revalorisation immobilière ↔ taux de crédit avec une corrélation forte et négative (ρ ≈ -0.636). 
+- Les séries montrent une forte persistance pour IRL, immo et surtout taux (autocorr lag1 ≈ 0.89, 0.94, 0.997), alors que les actions ont une autocorr faible (≈ 0.06). 
+- Le VAR(1) est mathématiquement stable (racines > 1) et la corrélation des chocs (résidus) reste faible (|ρ| ≤ ~0.18), suggérant que l’essentiel du couplage vient des niveaux/dynamiques plutôt que de chocs communs.
 
-Ne pas écrire :
-- YAML
-- CLI
-- système d’export
-- code propre moteur
+Le prochain travail de modélisation se découpera alors en 4 volets :
+
+1 ) Mise en place préalable des scripts et des dossiers de travail.
+2 ) Modélisation indépendante de la bourse. 
+3 ) Modélisation Inflation + indexation loyers (bloc corrélé)
+4 ) Modélisation Revalorisation immobilière + taux de crédit (bloc corrélé)
+
+TACHE 1 : Mise en place préalable des scripts et des dossiers de travail.
+   [] Il faut que pour toutes les tâches suivantes, la pipeline de traitement des données soit similaire : 
+      - chargement / prétraitement des données.
+      - Tests de différentes stratégies de modélisation possibles (gaussienne, bruit coloré, VAR, ...)
+      - Comparaison de la fidélité des différentes stratégies via un test de rejeu des données sur des tirages Monte Carlo.
+      - Tracé d'un graphique résumant les résultats via plotly.
+      - Conclusion sur la modélisation la plus adaptée à (aux) la (les) variable(s) actuellement étudiée(s).
+      - Toutes cette pipeline sera effectuée exclusivement via des scripts Python, pour que Codex puisse les faire tourner dans son environnement, observer les sorties et faire une analyse critique des résultats.
+   [] Pour l'instant ne fais cette tâche que pour préparer la tâche 2. Une fois la tâche 2 finie, nous répercuterons l'architecture terminée sur les autres tâches, pour éviter de devoir recopier les modifications à chaque itération. 
+
+TACHE 2 : Modélisation indépendante de la bourse. 
+   [] Il faut que ce script puisse accepter d'autres indices que le S&P500, donc il ne doit pas y avoir de noms dépendant de la série étudiée, et que les scripts soient robustes à un changement de données d'entrées (supposées tout de même au même format).
+   [] Implémenter la pipeline d'identification sur cette partie...
+
+TACHE 3 : 
+
+TACHE 4 :
