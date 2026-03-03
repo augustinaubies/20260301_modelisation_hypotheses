@@ -203,6 +203,42 @@ def calculer_metriques(serie: np.ndarray) -> dict[str, float]:
     }
 
 
+def _retours_vers_niveaux(retours: np.ndarray, base_indice: float = 100.0) -> np.ndarray:
+    return base_indice * np.exp(np.cumsum(retours, axis=-1))
+
+
+def _calculer_score_metriques_standardisees(
+    simulations: np.ndarray,
+    metriques_hist: dict[str, float],
+) -> tuple[float, dict[str, float]]:
+    metriques_sims = pd.DataFrame([calculer_metriques(path) for path in simulations])
+    ecarts_standardises: dict[str, float] = {}
+    for metrique, valeur_hist in metriques_hist.items():
+        denominateur = max(abs(float(valeur_hist)), 1e-6)
+        ecarts_standardises[metrique] = float(abs(metriques_sims[metrique].mean() - valeur_hist) / denominateur)
+
+    score = float(np.mean(list(ecarts_standardises.values())))
+    return score, ecarts_standardises
+
+
+def _calculer_score_rejeu_niveaux(
+    serie_historique: pd.Series,
+    simulations: np.ndarray,
+) -> tuple[float, float]:
+    historique_niveaux = _retours_vers_niveaux(serie_historique.to_numpy())
+    simulations_niveaux = _retours_vers_niveaux(simulations)
+    moyenne = simulations_niveaux.mean(axis=0)
+    q_bas = np.quantile(simulations_niveaux, 0.025, axis=0)
+    q_haut = np.quantile(simulations_niveaux, 0.975, axis=0)
+
+    rmse_relatif = float(
+        np.sqrt(np.mean((historique_niveaux - moyenne) ** 2)) / max(np.mean(historique_niveaux), 1e-6)
+    )
+    couverture_95 = float(np.mean((historique_niveaux >= q_bas) & (historique_niveaux <= q_haut)))
+    penalite_couverture = float(abs(couverture_95 - 0.95))
+    return rmse_relatif, penalite_couverture
+
+
 def comparer_strategies(
     serie_historique: pd.Series,
     n_paths: int,
@@ -253,13 +289,25 @@ def comparer_strategies(
 
     lignes: list[dict[str, float | str]] = []
     for nom_modele, sims in simulations_par_modele.items():
-        metriques_sims = pd.DataFrame([calculer_metriques(path) for path in sims])
-        ecarts = {
-            metrique: float(abs(metriques_sims[metrique].mean() - valeur_hist))
-            for metrique, valeur_hist in metriques_hist.items()
-        }
-        score = float(np.mean(list(ecarts.values())))
-        lignes.append({"modele": nom_modele, "score_fidelite": score, **ecarts})
+        score_metriques, ecarts = _calculer_score_metriques_standardisees(
+            simulations=sims,
+            metriques_hist=metriques_hist,
+        )
+        rmse_relatif_niveaux, penalite_couverture = _calculer_score_rejeu_niveaux(
+            serie_historique=serie_historique,
+            simulations=sims,
+        )
+        score = float(0.4 * score_metriques + 0.4 * rmse_relatif_niveaux + 0.2 * penalite_couverture)
+        lignes.append(
+            {
+                "modele": nom_modele,
+                "score_fidelite": score,
+                "score_metriques_standardisees": score_metriques,
+                "rmse_relatif_niveaux": rmse_relatif_niveaux,
+                "penalite_couverture_95": penalite_couverture,
+                **ecarts,
+            }
+        )
 
     resultats = pd.DataFrame(lignes).sort_values("score_fidelite", ascending=True)
     meilleur_modele = str(resultats.iloc[0]["modele"])
@@ -267,12 +315,8 @@ def comparer_strategies(
 
 
 def _score_fidelite_depuis_simulations(simulations: np.ndarray, metriques_hist: dict[str, float]) -> float:
-    metriques_sims = pd.DataFrame([calculer_metriques(path) for path in simulations])
-    ecarts = {
-        metrique: float(abs(metriques_sims[metrique].mean() - valeur_hist))
-        for metrique, valeur_hist in metriques_hist.items()
-    }
-    return float(np.mean(list(ecarts.values())))
+    score_metriques, _ = _calculer_score_metriques_standardisees(simulations=simulations, metriques_hist=metriques_hist)
+    return score_metriques
 
 
 def _simuler_pour_modele(
@@ -533,6 +577,7 @@ def construire_html_rapport(
 
     <section>
       <h2>Tableau de synthèse</h2>
+      <p>Le score global combine 3 briques: fidélité des métriques de rendements (standardisées), RMSE relatif sur le rejeu en niveaux (base 100) et pénalité de mauvaise couverture 95%.</p>
       {tableau_html}
     </section>
 
