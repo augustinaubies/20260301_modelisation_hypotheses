@@ -37,11 +37,11 @@ Variables cibles (mensuelles de préférence) :
    - cpi_france_fred.csv
 [X] Croissance salaire nominal (si dispo mensuel, sinon proxy)
    - Proxy V0.1 implémenté dans le notebook : `croissance_salaire_nominal_proxy = 1.5 * inflation` pour avancer sur l'analyse dynamique multivariée.
-[] Indice loyers (IRL)
-[] Prix immobilier (indice national)
+[X] Indice loyers (IRL)
+[X] Prix immobilier (indice national)
 [X] Rendement actions (MSCI World ou S&P 500)
    - S&P 500 utilisé, transformé en log-return mensuel.
-[] Taux crédit immobilier
+[X] Taux crédit immobilier
    - Attention il faut prendre celui en France car on applique les données Françaises.
 
 ---
@@ -56,16 +56,16 @@ Variables cibles (mensuelles de préférence) :
    - Fichier `data/raw/s_and_p_500.csv` ajouté.
 [X] Documenter la source (URL + date extraction)
    - Documentation ajoutée dans `data/raw/SOURCES.md`.
-[] Collecter les données pour toutes les autres variables à étudier.
+[X] Collecter les données pour toutes les autres variables à étudier.
     [X] Sous-tâches explicites créées pour chaque variable manquante.
     - Travail de cadrage terminé pour éviter une implémentation partielle fragile.
-    [] Collecter l'indice loyers (IRL) France en série temporelle exploitable.
+    [X] Collecter l'indice loyers (IRL) France en série temporelle exploitable.
         - Cible: série officielle INSEE (trimestrielle), puis conversion mensuelle justifiée pour l'analyse jointe.
-    [] Collecter l'indice de prix immobilier national France.
+    [X] Collecter l'indice de prix immobilier national France : IPL.
         - Cible: indice historique documenté (INSEE / BIS / Banque de France), avec fréquence explicite.
-    [] Collecter un taux de crédit immobilier France (ou proxy validé).
+    [X] Collecter un taux de crédit immobilier France (ou proxy validé).
         - Cible: série Banque de France ou BCE (MIR), avec justification si remplacement par un proxy taux long.
-    [] Question utilisateur : en cas de sources multiples (INSEE/BCE/Banque de France), quelle source prioriser pour figer la version de référence ?
+        - taux_credit_habitation.csv
 
 ---
 
