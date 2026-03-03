@@ -543,8 +543,76 @@ def construire_figure_rejeu(
     return fig
 
 
+def _calculer_kde(serie: np.ndarray, n_points: int = 300) -> tuple[np.ndarray, np.ndarray]:
+    serie = np.asarray(serie, dtype=float)
+    serie = serie[np.isfinite(serie)]
+    if serie.size < 2:
+        x = np.array([0.0])
+        y = np.array([0.0])
+        return x, y
+
+    xmin, xmax = float(np.quantile(serie, 0.005)), float(np.quantile(serie, 0.995))
+    if xmin == xmax:
+        xmin -= 1e-6
+        xmax += 1e-6
+    x = np.linspace(xmin, xmax, n_points)
+    try:
+        kde = stats.gaussian_kde(serie)
+        y = kde(x)
+    except Exception:
+        y = np.zeros_like(x)
+    return x, y
+
+
+def construire_figure_distribution_variations(
+    serie_historique: pd.Series,
+    simulations_par_modele: dict[str, np.ndarray],
+) -> go.Figure:
+    palette = px.colors.qualitative.Plotly
+    couleurs = {nom: palette[idx % len(palette)] for idx, nom in enumerate(simulations_par_modele.keys())}
+
+    fig = go.Figure()
+
+    x_hist, y_hist = _calculer_kde(serie_historique.to_numpy())
+    fig.add_trace(
+        go.Scatter(
+            x=x_hist,
+            y=y_hist,
+            mode="lines",
+            name="historique",
+            line=dict(color="#f8fafc", width=3),
+        )
+    )
+
+    for nom_modele, simulations in simulations_par_modele.items():
+        variations_modele = simulations.reshape(-1)
+        x_modele, y_modele = _calculer_kde(variations_modele)
+        fig.add_trace(
+            go.Scatter(
+                x=x_modele,
+                y=y_modele,
+                mode="lines",
+                name=nom_modele,
+                line=dict(color=couleurs[nom_modele], width=2),
+            )
+        )
+
+    fig.update_layout(
+        title="Distribution des variations mensuelles (densité)",
+        xaxis_title="Variation mensuelle (log-return)",
+        yaxis_title="Densité de probabilité",
+        template="plotly_dark",
+        paper_bgcolor="#0f172a",
+        plot_bgcolor="#111827",
+        height=500,
+        legend_title_text="Série",
+    )
+    return fig
+
+
 def construire_html_rapport(
     fig: go.Figure,
+    fig_distribution: go.Figure,
     resultats: pd.DataFrame,
     meilleur_modele: str,
     resultats_dates: pd.DataFrame,
@@ -555,6 +623,7 @@ def construire_html_rapport(
     tableau_html = resultats.to_html(index=False, float_format="%.6f")
     tableau_dates_html = resultats_dates.head(10).to_html(index=False, float_format="%.6f")
     figure_html = fig.to_html(full_html=False, include_plotlyjs="cdn")
+    figure_distribution_html = fig_distribution.to_html(full_html=False, include_plotlyjs=False)
     return f"""<!DOCTYPE html>
 <html lang=\"fr\">
   <head>
@@ -609,6 +678,12 @@ def construire_html_rapport(
       <p>Le rejeu ci-dessous est recalé sur la fenêtre optimale détectée, de <b>{meilleure_date.strftime("%Y-%m-%d")}</b> à <b>{date_fin.strftime("%Y-%m-%d")}</b>.</p>
       {figure_html}
     </section>
+
+    <section class=\"plot-container\">
+      <h2>Distribution des variations mensuelles</h2>
+      <p>Cette courbe compare la densité des variations mensuelles historiques avec l'ensemble des tirages Monte Carlo de chaque stratégie.</p>
+      {figure_distribution_html}
+    </section>
   </body>
 </html>
 """
@@ -641,7 +716,7 @@ def executer_pipeline_univariee(
        n_paths=min(n_paths, 120),
        seed=seed,
    )
-    meilleure_date = pd.Timestamp('1980-01-01')
+    # meilleure_date = pd.Timestamp('1980-01-01')
     
     serie_optimale = serie.loc[meilleure_date:]
     _, _, simulations_optimales = comparer_strategies(
@@ -654,8 +729,13 @@ def executer_pipeline_univariee(
     sortie.mkdir(parents=True, exist_ok=True)
 
     fig = construire_figure_rejeu(serie_historique=serie_optimale, simulations_par_modele=simulations_optimales)
+    fig_distribution = construire_figure_distribution_variations(
+        serie_historique=serie_optimale,
+        simulations_par_modele=simulations_optimales,
+    )
     rapport_html = construire_html_rapport(
         fig=fig,
+        fig_distribution=fig_distribution,
         resultats=resultats,
         meilleur_modele=meilleur_modele,
         resultats_dates=resultats_dates,
