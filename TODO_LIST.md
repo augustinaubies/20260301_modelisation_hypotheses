@@ -145,8 +145,12 @@ TACHE 2 : Modélisation indépendante de la bourse.
       - Figure Plotly convertie en rejeu temporel multi-modèles avec légende interactive par stratégie.
    [X] Les CSVs de sortie ne sont pas utiles s'ils ne stockent pas d'information utile. Mettre la conclusion du fichier txt, le tableau de synthèse et des CSVs dans le fichier HTML pour que toutes les sorties soient en 1 fichier (avec des dépendances s'il le faut absolument en PNG ou csv ou les données par exemple).
       - Sortie unifiée dans `comparaison_fidelite.html` (synthèse, conclusion, tableau et visualisations), suppression des exports CSV/TXT redondants.
-   [] Sur le graphe final, il faut afficher les 2 courbes suivantes (remplacer les précédentes) : 1 graphe de la courbe temporelle (donc l'intégrale des variations), et un graphe affichant les distributions (moyenne et couloir à 95 pct à chaque pas de temps) de toutes les stratégies (bien sûr l'historique n'a pas d'écart type vu qu'il n'y a qu'une courbe).
-   [] Attention sur le HTML, le texte se superpose aux graphes. il faut bien espacer tout ça et organiser pour rendre le rendu joli.
+   [X] Sur le graphe final, il faut afficher les 2 courbes suivantes (remplacer les précédentes) : 1 graphe de la courbe temporelle (donc l'intégrale des variations), et un graphe affichant les distributions (moyenne et couloir à 95 pct à chaque pas de temps) de toutes les stratégies (bien sûr l'historique n'a pas d'écart type vu qu'il n'y a qu'une courbe).
+      - Figure refondue en 2 sous-graphes: niveaux base 100 (intégrale des log-returns) puis moyenne + couloir 95% par stratégie.
+   [X] Attention sur le HTML, le texte se superpose aux graphes. il faut bien espacer tout ça et organiser pour rendre le rendu joli.
+      - Rapport HTML restructuré (sections séparées, CSS de marges/espacements, tableau + graphique découplés).
+   [] Toutes les distributions font exploser les rendements par rapport à l'historique, sûrement car les dynamiques du marché ont évolué. Il faudrait identifier à partir de quelle date dans le passé la méthode permet de mieux reproduire les données, quitte à faire une boucle for sur une des méthodes pour la déterminer.
+   [] Il faut mettre le dark mode sur le fichier HTML, quitte à adapter les couleurs des figures, des courbes et du texte. 
 
 TACHE 3 : 
 

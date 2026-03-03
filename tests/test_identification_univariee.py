@@ -2,7 +2,12 @@ from __future__ import annotations
 
 import pandas as pd
 
-from modelisation_macro.identification.univariee import calculer_metriques, comparer_strategies
+from modelisation_macro.identification.univariee import (
+    calculer_metriques,
+    comparer_strategies,
+    construire_figure_rejeu,
+    construire_html_rapport,
+)
 
 
 def test_calculer_metriques_retourne_cles_attendues() -> None:
@@ -24,3 +29,28 @@ def test_comparer_strategies_retourne_modele_existant() -> None:
     }
     assert meilleur_modele in modeles
     assert set(simulations.keys()) == modeles
+
+
+def test_construire_figure_rejeu_cree_2_sous_graphes_attendus() -> None:
+    index = pd.date_range("2020-01-01", periods=6, freq="MS")
+    serie = pd.Series([0.01, -0.02, 0.01, 0.0, 0.015, -0.01], index=index)
+    simulations = {"gaussien_iid": [[0.0, 0.01, -0.01, 0.0, 0.0, 0.01]]}
+
+    fig = construire_figure_rejeu(serie_historique=serie, simulations_par_modele=simulations)
+
+    assert "intégrale des variations log" in fig.layout.annotations[0].text
+    assert "couloir 95%" in fig.layout.annotations[1].text
+
+
+def test_construire_html_rapport_separe_bien_texte_et_graphiques() -> None:
+    index = pd.date_range("2020-01-01", periods=4, freq="MS")
+    serie = pd.Series([0.01, -0.01, 0.02, -0.005], index=index)
+    simulations = {"gaussien_iid": [[0.0, 0.01, -0.01, 0.0]]}
+    fig = construire_figure_rejeu(serie_historique=serie, simulations_par_modele=simulations)
+    resultats = pd.DataFrame([{"modele": "gaussien_iid", "score_fidelite": 0.1}])
+
+    rapport = construire_html_rapport(fig=fig, resultats=resultats, meilleur_modele="gaussien_iid")
+
+    assert "<section>" in rapport
+    assert "class=\"plot-container\"" in rapport
+    assert "Meilleur modèle selon score global" in rapport

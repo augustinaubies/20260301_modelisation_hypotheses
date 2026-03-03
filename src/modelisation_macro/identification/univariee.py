@@ -267,6 +267,17 @@ def comparer_strategies(
     return resultats, meilleur_modele, simulations_par_modele
 
 
+
+
+def _hex_vers_rgba(couleur_hex: str, alpha: float) -> str | None:
+    if not couleur_hex.startswith("#") or len(couleur_hex) != 7:
+        return None
+    r = int(couleur_hex[1:3], 16)
+    g = int(couleur_hex[3:5], 16)
+    b = int(couleur_hex[5:7], 16)
+    return f"rgba({r},{g},{b},{alpha})"
+
+
 def construire_figure_rejeu(
     serie_historique: pd.Series,
     simulations_par_modele: dict[str, np.ndarray],
@@ -276,14 +287,19 @@ def construire_figure_rejeu(
         cols=1,
         shared_xaxes=True,
         vertical_spacing=0.1,
-        subplot_titles=("Rejeu Monte Carlo des log-returns", "Moyennes glissantes (12 mois)"),
+        subplot_titles=(
+            "Courbes temporelles (intégrale des variations log)",
+            "Distribution temporelle des stratégies (moyenne et couloir 95%)",
+        ),
     )
 
     x = serie_historique.index
+    base_indice = 100.0
+    historique_niveaux = base_indice * np.exp(np.cumsum(serie_historique.to_numpy()))
     fig.add_trace(
         go.Scatter(
             x=x,
-            y=serie_historique.to_numpy(),
+            y=historique_niveaux,
             mode="lines",
             name="historique",
             line=dict(color="black", width=2),
@@ -294,10 +310,11 @@ def construire_figure_rejeu(
     fig.add_trace(
         go.Scatter(
             x=x,
-            y=serie_historique.rolling(12, min_periods=1).mean().to_numpy(),
+            y=historique_niveaux,
             mode="lines",
-            name="historique_rolling_12m",
-            line=dict(color="black", dash="dash"),
+            name="historique",
+            line=dict(color="black", width=2),
+            showlegend=False,
         ),
         row=2,
         col=1,
@@ -306,7 +323,8 @@ def construire_figure_rejeu(
     palette = px.colors.qualitative.Plotly
     for idx, (nom_modele, simulations) in enumerate(simulations_par_modele.items()):
         couleur = palette[idx % len(palette)]
-        for path in simulations:
+        simulations_niveaux = base_indice * np.exp(np.cumsum(simulations, axis=1))
+        for path in simulations_niveaux:
             fig.add_trace(
                 go.Scatter(
                     x=x,
@@ -321,26 +339,57 @@ def construire_figure_rejeu(
                 row=1,
                 col=1,
             )
+
+        moyenne = simulations_niveaux.mean(axis=0)
+        q_bas = np.quantile(simulations_niveaux, 0.025, axis=0)
+        q_haut = np.quantile(simulations_niveaux, 0.975, axis=0)
+
         fig.add_trace(
             go.Scatter(
                 x=x,
-                y=simulations.mean(axis=0),
+                y=moyenne,
                 mode="lines",
                 line=dict(color=couleur, width=2),
-                name=f"{nom_modele}_moyenne",
+                name=f"{nom_modele} - moyenne",
                 legendgroup=nom_modele,
             ),
             row=1,
             col=1,
         )
-        rolling_sims = pd.DataFrame(simulations.T, index=x).rolling(12, min_periods=1).mean().mean(axis=1)
         fig.add_trace(
             go.Scatter(
                 x=x,
-                y=rolling_sims.to_numpy(),
+                y=q_bas,
+                mode="lines",
+                line=dict(width=0),
+                name=f"{nom_modele} - q2.5",
+                legendgroup=nom_modele,
+                showlegend=False,
+            ),
+            row=2,
+            col=1,
+        )
+        fig.add_trace(
+            go.Scatter(
+                x=x,
+                y=q_haut,
+                mode="lines",
+                fill="tonexty",
+                fillcolor=_hex_vers_rgba(couleur, 0.18),
+                line=dict(width=0),
+                name=f"{nom_modele} - couloir 95%",
+                legendgroup=nom_modele,
+            ),
+            row=2,
+            col=1,
+        )
+        fig.add_trace(
+            go.Scatter(
+                x=x,
+                y=moyenne,
                 mode="lines",
                 line=dict(color=couleur, width=2),
-                name=f"{nom_modele}_rolling_12m",
+                name=f"{nom_modele} - moyenne",
                 legendgroup=nom_modele,
                 showlegend=False,
             ),
@@ -351,9 +400,61 @@ def construire_figure_rejeu(
     fig.update_layout(
         title="Comparaison des rejeux Monte Carlo par stratégie",
         legend_title_text="Cliquer pour activer/désactiver un modèle",
-        height=850,
+        height=900,
     )
+    fig.update_yaxes(title_text="Indice base 100", row=1, col=1)
+    fig.update_yaxes(title_text="Indice base 100", row=2, col=1)
     return fig
+
+
+def construire_html_rapport(fig: go.Figure, resultats: pd.DataFrame, meilleur_modele: str) -> str:
+    tableau_html = resultats.to_html(index=False, float_format="%.6f")
+    figure_html = fig.to_html(full_html=False, include_plotlyjs="cdn")
+    return f"""<!DOCTYPE html>
+<html lang=\"fr\">
+  <head>
+    <meta charset=\"utf-8\" />
+    <title>Comparaison de fidélité des stratégies</title>
+    <style>
+      body {{ font-family: Arial, sans-serif; margin: 24px 32px; line-height: 1.5; }}
+      h1, h2 {{ margin-top: 0; }}
+      section {{ margin-bottom: 28px; }}
+      .plot-container {{ margin: 30px 0 36px 0; }}
+      table {{ border-collapse: collapse; }}
+      th, td {{ border: 1px solid #ddd; padding: 6px 10px; }}
+      th {{ background: #f5f5f5; }}
+      ul {{ margin-top: 8px; }}
+    </style>
+  </head>
+  <body>
+    <section>
+      <h1>Comparaison des stratégies de modélisation</h1>
+      <p><b>Meilleur modèle selon score global :</b> {meilleur_modele}</p>
+    </section>
+
+    <section>
+      <h2>Lecture critique des stratégies</h2>
+      <ul>
+        <li><b>Gaussien i.i.d.</b> : baseline simple, sous-estime les queues épaisses.</li>
+        <li><b>AR(1)</b> : capture une partie de la persistance moyenne, mais pas la volatilité conditionnelle.</li>
+        <li><b>Student-t i.i.d.</b> : améliore la modélisation des extrêmes (queues épaisses).</li>
+        <li><b>Volatilité EWMA</b> : proxy GARCH léger, robuste et sans dépendance lourde.</li>
+        <li><b>Markov-switching 2 régimes</b> : pertinent si alternance de régimes drift/vol détectable.</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>Tableau de synthèse</h2>
+      {tableau_html}
+    </section>
+
+    <section class=\"plot-container\">
+      <h2>Visualisation Monte Carlo</h2>
+      {figure_html}
+    </section>
+  </body>
+</html>
+"""
 
 
 def executer_pipeline_univariee(
@@ -379,25 +480,8 @@ def executer_pipeline_univariee(
     sortie.mkdir(parents=True, exist_ok=True)
 
     fig = construire_figure_rejeu(serie_historique=serie, simulations_par_modele=simulations)
-    fig.add_annotation(
-        xref="paper",
-        yref="paper",
-        x=0,
-        y=-0.16,
-        showarrow=False,
-        align="left",
-        text=(
-            "<b>Lecture critique des stratégies</b><br>"
-            "• Gaussien i.i.d.: baseline simple, sous-estime les queues épaisses.<br>"
-            "• AR(1): capture une partie de la persistance moyenne, mais pas la volatilité conditionnelle.<br>"
-            "• Student-t i.i.d.: améliore la modélisation des extrêmes (queues épaisses).<br>"
-            "• Volatilité EWMA (proxy GARCH): approximation légère et robuste sans dépendance externe.<br>"
-            "• Markov-switching 2 régimes: pertinent si alternance de régimes drift/vol détectable.<br><br>"
-            f"<b>Meilleur modèle selon score global:</b> {meilleur_modele}<br>"
-            f"<b>Tableau de synthèse:</b><br>{resultats.to_html(index=False, float_format='%.6f')}"
-        ),
-    )
+    rapport_html = construire_html_rapport(fig=fig, resultats=resultats, meilleur_modele=meilleur_modele)
     figure_path = sortie / "comparaison_fidelite.html"
-    fig.write_html(figure_path, include_plotlyjs="cdn")
+    figure_path.write_text(rapport_html, encoding="utf-8")
 
     return resultats, meilleur_modele, figure_path
