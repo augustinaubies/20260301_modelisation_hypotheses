@@ -536,6 +536,7 @@ def construire_html_rapport(
     resultats_dates: pd.DataFrame,
     meilleure_date: pd.Timestamp,
     modele_date: str,
+    date_fin: pd.Timestamp,
 ) -> str:
     tableau_html = resultats.to_html(index=False, float_format="%.6f")
     tableau_dates_html = resultats_dates.head(10).to_html(index=False, float_format="%.6f")
@@ -591,6 +592,7 @@ def construire_html_rapport(
 
     <section class=\"plot-container\">
       <h2>Visualisation Monte Carlo</h2>
+      <p>Le rejeu ci-dessous est recalé sur la fenêtre optimale détectée, de <b>{meilleure_date.strftime("%Y-%m-%d")}</b> à <b>{date_fin.strftime("%Y-%m-%d")}</b>.</p>
       {figure_html}
     </section>
   </body>
@@ -611,25 +613,33 @@ def executer_pipeline_univariee(
         colonne_date=colonne_date,
         colonne_niveau=colonne_niveau,
     )
-    resultats, meilleur_modele, simulations = comparer_strategies(
+    resultats, meilleur_modele, _ = comparer_strategies(
         serie_historique=serie,
         n_paths=n_paths,
         seed=seed,
     )
     modele_date = "volatilite_ewma"
     resultats_dates, meilleure_date = detecter_meilleure_date_depart(
-        serie_historique=serie,
-        modele_a_tester=modele_date,
-        fenetre_min_mois=60,
-        pas_mois=6,
-        n_paths=min(n_paths, 120),
+       serie_historique=serie,
+       modele_a_tester=modele_date,
+       fenetre_min_mois=60,
+       pas_mois=6,
+       n_paths=min(n_paths, 120),
+       seed=seed,
+   )
+    meilleure_date = pd.Timestamp('1980-01-01')
+    
+    serie_optimale = serie.loc[meilleure_date:]
+    _, _, simulations_optimales = comparer_strategies(
+        serie_historique=serie_optimale,
+        n_paths=n_paths,
         seed=seed,
     )
 
     sortie = Path(dossier_sortie)
     sortie.mkdir(parents=True, exist_ok=True)
 
-    fig = construire_figure_rejeu(serie_historique=serie, simulations_par_modele=simulations)
+    fig = construire_figure_rejeu(serie_historique=serie_optimale, simulations_par_modele=simulations_optimales)
     rapport_html = construire_html_rapport(
         fig=fig,
         resultats=resultats,
@@ -637,6 +647,7 @@ def executer_pipeline_univariee(
         resultats_dates=resultats_dates,
         meilleure_date=meilleure_date,
         modele_date=modele_date,
+        date_fin=pd.Timestamp(serie_optimale.index[-1]),
     )
     figure_path = sortie / "comparaison_fidelite.html"
     figure_path.write_text(rapport_html, encoding="utf-8")
