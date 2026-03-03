@@ -57,7 +57,15 @@ Variables cibles (mensuelles de préférence) :
 [X] Documenter la source (URL + date extraction)
    - Documentation ajoutée dans `data/raw/SOURCES.md`.
 [] Collecter les données pour toutes les autres variables à étudier.
-    [] Sous tâche pour chaque variable...
+    [X] Sous-tâches explicites créées pour chaque variable manquante.
+    - Travail de cadrage terminé pour éviter une implémentation partielle fragile.
+    [] Collecter l'indice loyers (IRL) France en série temporelle exploitable.
+        - Cible: série officielle INSEE (trimestrielle), puis conversion mensuelle justifiée pour l'analyse jointe.
+    [] Collecter l'indice de prix immobilier national France.
+        - Cible: indice historique documenté (INSEE / BIS / Banque de France), avec fréquence explicite.
+    [] Collecter un taux de crédit immobilier France (ou proxy validé).
+        - Cible: série Banque de France ou BCE (MIR), avec justification si remplacement par un proxy taux long.
+    [] Question utilisateur : en cas de sources multiples (INSEE/BCE/Banque de France), quelle source prioriser pour figer la version de référence ?
 
 ---
 
@@ -120,4 +128,3 @@ Ne pas écrire :
 - CLI
 - système d’export
 - code propre moteur
-
