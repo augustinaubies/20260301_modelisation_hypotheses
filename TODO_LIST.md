@@ -125,18 +125,23 @@ Le prochain travail de modélisation se découpera alors en 4 volets :
 4 ) Modélisation Revalorisation immobilière + taux de crédit (bloc corrélé)
 
 TACHE 1 : Mise en place préalable des scripts et des dossiers de travail.
-   [] Il faut que pour toutes les tâches suivantes, la pipeline de traitement des données soit similaire : 
+   [X] Il faut que pour toutes les tâches suivantes, la pipeline de traitement des données soit similaire : 
       - chargement / prétraitement des données.
       - Tests de différentes stratégies de modélisation possibles (gaussienne, bruit coloré, VAR, ...)
       - Comparaison de la fidélité des différentes stratégies via un test de rejeu des données sur des tirages Monte Carlo.
       - Tracé d'un graphique résumant les résultats via plotly.
       - Conclusion sur la modélisation la plus adaptée à (aux) la (les) variable(s) actuellement étudiée(s).
       - Toutes cette pipeline sera effectuée exclusivement via des scripts Python, pour que Codex puisse les faire tourner dans son environnement, observer les sorties et faire une analyse critique des résultats.
-   [] Pour l'instant ne fais cette tâche que pour préparer la tâche 2. Une fois la tâche 2 finie, nous répercuterons l'architecture terminée sur les autres tâches, pour éviter de devoir recopier les modifications à chaque itération. 
+   [X] Pour l'instant ne fais cette tâche que pour préparer la tâche 2. Une fois la tâche 2 finie, nous répercuterons l'architecture terminée sur les autres tâches, pour éviter de devoir recopier les modifications à chaque itération.
+      - Pipeline scriptable mise en place dans `scripts/pipeline_identification_univariee.py` avec logique réutilisable dans `src/modelisation_macro/identification/univariee.py`. 
 
 TACHE 2 : Modélisation indépendante de la bourse. 
-   [] Il faut que ce script puisse accepter d'autres indices que le S&P500, donc il ne doit pas y avoir de noms dépendant de la série étudiée, et que les scripts soient robustes à un changement de données d'entrées (supposées tout de même au même format).
-   [] Implémenter la pipeline d'identification sur cette partie...
+   [X] Il faut que ce script puisse accepter d'autres indices que le S&P500, donc il ne doit pas y avoir de noms dépendant de la série étudiée, et que les scripts soient robustes à un changement de données d'entrées (supposées tout de même au même format).
+   [X] Implémenter la pipeline d'identification sur cette partie...
+      - Deux stratégies implémentées (gaussienne i.i.d. et AR(1) bruit coloré), comparées par rejeu Monte Carlo + score de fidélité et synthèse Plotly.
+   [] Implémenter davantage de stratégies state of the art (dont notamment une loi Student-t / régimes, log-returns + volatility model (GARCH/SV), Markov-switching (drift/vol) s'il sont pertinents, sois critique de ces propositions avant de les implémenter).
+   [] Le graphe final doit montrer une courbe temporelle avec la courbe de référence, les tirages MCs des différentes stratégies (chaque stratégie a sa couleur et la grappe de cheveleus doit pouvoir être désactivée d'un clic).
+   [] Les CSVs de sortie ne sont pas utiles s'ils ne stockent pas d'information utile. Mettre la conclusion du fichier txt, le tableau de synthèse et des CSVs dans le fichier HTML pour que toutes les sorties soient en 1 fichier (avec des dépendances s'il le faut absolument en PNG ou csv ou les données par exemple).
 
 TACHE 3 : 
 

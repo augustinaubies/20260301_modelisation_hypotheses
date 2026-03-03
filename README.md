@@ -56,3 +56,21 @@ pip install -e .[dev]
 ## Notebook
 
 Les notebooks utilisent exclusivement le code de `src/`.
+
+
+## Pipeline scripts (itération tâche 2)
+
+Un script Python générique est disponible pour l'identification univariée (ex: indice actions):
+
+```bash
+python scripts/pipeline_identification_univariee.py \
+  --input-csv data/raw/s_and_p_500.csv \
+  --value-column SP500 \
+  --output-dir outputs/task2_bourse
+```
+
+Sorties générées:
+- série prétraitée en log-retours,
+- tableau des scores de fidélité Monte Carlo,
+- graphique Plotly de comparaison des modèles,
+- conclusion textuelle sur le modèle recommandé.
