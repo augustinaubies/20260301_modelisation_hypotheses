@@ -71,10 +71,12 @@ Variables cibles (mensuelles de préférence) :
 
 ## 3) Nettoyage & normalisation
 
-[] Mettre toutes les séries au même pas temporel (mensuel)
-[] Aligner sur un index commun
-[] Gérer trous / NaN (drop ou interpolation justifiée)
-   - NaN gérés par `dropna()` après transformations.
+[X] Mettre toutes les séries au même pas temporel (mensuel)
+   - IRL/IPL trimestriels interpolés linéairement au pas mensuel; autres séries converties et harmonisées en fin de mois.
+[X] Aligner sur un index commun
+   - Alignement inner-join sur la fenêtre commune 2010-10 à 2024-02.
+[X] Gérer trous / NaN (drop ou interpolation justifiée)
+   - Interpolation justifiée sur niveaux IRL/IPL puis `dropna()` final sur le jeu aligné.
 
 ---
 
@@ -82,18 +84,18 @@ Variables cibles (mensuelles de préférence) :
 
 Pour chaque variable :
 
-[] Moyenne
-[] Volatilité
-[] Histogramme
-[] Kurtosis / skewness
-[] Test stationnarité (ADF)
+[X] Moyenne
+[X] Volatilité
+[X] Histogramme
+[X] Kurtosis / skewness
+[X] Test stationnarité (ADF)
 
 Pour le système complet :
 
-[] Matrice de corrélation
-[] Autocorrélations (ACF)
-[] Corrélations croisées (cross-corr)
-[] Visualisation rolling mean / rolling vol
+[X] Matrice de corrélation
+[X] Autocorrélations (ACF)
+[X] Corrélations croisées (cross-corr)
+[X] Visualisation rolling mean / rolling vol
 
 ---
 
@@ -101,12 +103,12 @@ Pour le système complet :
 
 Questions à répondre (écrire conclusions dans le notebook) :
 
-[] Les séries sont-elles stationnaires ?
-[] Faut-il modéliser les niveaux ou les variations ?
-[] Les corrélations sont-elles stables dans le temps ?
-[] Y a-t-il une forte persistance (AR(1) élevé) ?
-[] Y a-t-il des régimes évidents (inflation haute / basse) ?
-   - Indice préliminaire via rolling stats; validation régime à confirmer après ajout des variables manquantes.
+[X] Les séries sont-elles stationnaires ?
+[X] Faut-il modéliser les niveaux ou les variations ?
+[X] Les corrélations sont-elles stables dans le temps ?
+[X] Y a-t-il une forte persistance (AR(1) élevé) ?
+[X] Y a-t-il des régimes évidents (inflation haute / basse) ?
+   - Vérification faite dans le notebook via ADF, autocorr lag-1 et découpage régime inflation par médiane.
 
 ---
 
@@ -114,10 +116,10 @@ Questions à répondre (écrire conclusions dans le notebook) :
 
 Sans framework complexe :
 
-[] Estimer un VAR(1) via statsmodels
-[] Vérifier stabilité (valeurs propres)
-[] Simuler une trajectoire
-[] Comparer stats simulées vs stats historiques
+[X] Estimer un VAR(1) via statsmodels
+[X] Vérifier stabilité (valeurs propres)
+[X] Simuler une trajectoire
+[X] Comparer stats simulées vs stats historiques
 
 ---
 
