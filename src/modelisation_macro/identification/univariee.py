@@ -242,15 +242,23 @@ def _calculer_score_rejeu_niveaux(
 def comparer_strategies(
     serie_historique: pd.Series,
     n_paths: int,
+    fenetres_calibration: dict[str, pd.Series] | None = None,
     seed: int | None = None,
 ) -> tuple[pd.DataFrame, str, dict[str, np.ndarray]]:
     n_periodes = len(serie_historique)
     metriques_hist = calculer_metriques(serie_historique.to_numpy())
 
-    modele_iid = ModeleGaussienIID.calibrer(serie_historique)
+    fenetres_calibration = fenetres_calibration or {}
+    serie_gauss = fenetres_calibration.get("gaussien_iid", serie_historique)
+    serie_ar1 = fenetres_calibration.get("ar1_bruit_colore", serie_historique)
+    serie_student = fenetres_calibration.get("student_t_iid", serie_historique)
+    serie_vol = fenetres_calibration.get("volatilite_ewma", serie_historique)
+    serie_markov = fenetres_calibration.get("markov_switching_2_regimes", serie_historique)
+
+    modele_iid = ModeleGaussienIID.calibrer(serie_gauss)
     sims_iid = modele_iid.simuler(n_periodes=n_periodes, n_paths=n_paths, seed=seed)
 
-    modele_ar1 = ModeleAR1.calibrer(serie_historique)
+    modele_ar1 = ModeleAR1.calibrer(serie_ar1)
     sims_ar1 = modele_ar1.simuler(
         n_periodes=n_periodes,
         n_paths=n_paths,
@@ -258,21 +266,21 @@ def comparer_strategies(
         seed=None if seed is None else seed + 1,
     )
 
-    modele_student = ModeleStudentTIID.calibrer(serie_historique)
+    modele_student = ModeleStudentTIID.calibrer(serie_student)
     sims_student = modele_student.simuler(
         n_periodes=n_periodes,
         n_paths=n_paths,
         seed=None if seed is None else seed + 2,
     )
 
-    modele_vol = ModeleVolatiliteEWMA.calibrer(serie_historique)
+    modele_vol = ModeleVolatiliteEWMA.calibrer(serie_vol)
     sims_vol = modele_vol.simuler(
         n_periodes=n_periodes,
         n_paths=n_paths,
         seed=None if seed is None else seed + 3,
     )
 
-    modele_markov = ModeleMarkovSwitching.calibrer(serie_historique)
+    modele_markov = ModeleMarkovSwitching.calibrer(serie_markov)
     sims_markov = modele_markov.simuler(
         n_periodes=n_periodes,
         n_paths=n_paths,
@@ -384,6 +392,45 @@ def detecter_meilleure_date_depart(
     resultats = pd.DataFrame(candidats).sort_values("score_fidelite", ascending=True).reset_index(drop=True)
     meilleure_date = pd.Timestamp(resultats.loc[0, "date_depart"])
     return resultats, meilleure_date
+
+
+def detecter_date_stable_gaussienne(
+    serie_historique: pd.Series,
+    fenetre_min_mois: int = 60,
+    pas_mois: int = 3,
+) -> tuple[pd.DataFrame, pd.Timestamp]:
+    if len(serie_historique) < fenetre_min_mois:
+        raise ValueError("Série trop courte pour détecter une stabilité de densité.")
+
+    candidats: list[dict[str, float | pd.Timestamp | int]] = []
+    for start_idx in range(0, len(serie_historique) - fenetre_min_mois + 1, pas_mois):
+        fenetre = serie_historique.iloc[start_idx:]
+        n = len(fenetre)
+        demi = n // 2
+        if demi < 24:
+            continue
+
+        premier = fenetre.iloc[:demi].to_numpy(dtype=float)
+        second = fenetre.iloc[demi:].to_numpy(dtype=float)
+        mouvement = float(stats.wasserstein_distance(premier, second))
+        candidats.append(
+            {
+                "date_depart": fenetre.index[0],
+                "mouvement_densite": mouvement,
+                "n_observations": n,
+            }
+        )
+
+    resultats = pd.DataFrame(candidats).sort_values("date_depart").reset_index(drop=True)
+    seuil = float(resultats["mouvement_densite"].quantile(0.25))
+    stables = resultats[resultats["mouvement_densite"] <= seuil]
+
+    if stables.empty:
+        meilleure_date = pd.Timestamp(resultats.sort_values("mouvement_densite").iloc[0]["date_depart"])
+    else:
+        meilleure_date = pd.Timestamp(stables.iloc[0]["date_depart"])
+
+    return resultats.sort_values("mouvement_densite").reset_index(drop=True), meilleure_date
 
 
 
@@ -564,6 +611,44 @@ def _calculer_kde(serie: np.ndarray, n_points: int = 300) -> tuple[np.ndarray, n
     return x, y
 
 
+def _calculer_densite_gaussienne_theorique(
+    serie_historique: pd.Series,
+    n_points: int = 300,
+) -> tuple[np.ndarray, np.ndarray]:
+    mu = float(serie_historique.mean())
+    sigma = max(float(serie_historique.std(ddof=1)), 1e-12)
+    borne_basse, borne_haute = np.quantile(serie_historique.to_numpy(), [0.005, 0.995])
+    x = np.linspace(float(borne_basse), float(borne_haute), n_points)
+    y = stats.norm.pdf(x, loc=mu, scale=sigma)
+    return x, y
+
+
+def _evaluer_calibration_distributions(
+    serie_historique: pd.Series,
+    simulations_par_modele: dict[str, np.ndarray],
+) -> pd.DataFrame:
+    lignes: list[dict[str, float | str]] = []
+    hist = serie_historique.to_numpy(dtype=float)
+    for nom_modele, simulations in simulations_par_modele.items():
+        echantillon = simulations.reshape(-1)
+        if echantillon.size == 0:
+            continue
+        ks_stat, ks_pvalue = stats.ks_2samp(hist, echantillon)
+        lignes.append(
+            {
+                "modele": nom_modele,
+                "mean_hist": float(np.mean(hist)),
+                "mean_modele": float(np.mean(echantillon)),
+                "std_hist": float(np.std(hist, ddof=1)),
+                "std_modele": float(np.std(echantillon, ddof=1)),
+                "ks_stat": float(ks_stat),
+                "ks_pvalue": float(ks_pvalue),
+            }
+        )
+
+    return pd.DataFrame(lignes).sort_values("ks_stat", ascending=True)
+
+
 def construire_figure_distribution_variations(
     serie_historique: pd.Series,
     simulations_par_modele: dict[str, np.ndarray],
@@ -581,6 +666,17 @@ def construire_figure_distribution_variations(
             mode="lines",
             name="historique",
             line=dict(color="#f8fafc", width=3),
+        )
+    )
+
+    x_gauss_theorique, y_gauss_theorique = _calculer_densite_gaussienne_theorique(serie_historique)
+    fig.add_trace(
+        go.Scatter(
+            x=x_gauss_theorique,
+            y=y_gauss_theorique,
+            mode="lines",
+            name="gaussienne théorique (fit historique)",
+            line=dict(color="#f97316", width=2, dash="dot"),
         )
     )
 
@@ -618,12 +714,17 @@ def construire_html_rapport(
     resultats_dates: pd.DataFrame,
     meilleure_date: pd.Timestamp,
     modele_date: str,
+    resultats_dates_gauss: pd.DataFrame,
+    meilleure_date_gauss: pd.Timestamp,
     date_fin: pd.Timestamp,
+    diagnostic_calibration: pd.DataFrame,
 ) -> str:
     tableau_html = resultats.to_html(index=False, float_format="%.6f")
     tableau_dates_html = resultats_dates.head(10).to_html(index=False, float_format="%.6f")
+    tableau_dates_gauss_html = resultats_dates_gauss.head(10).to_html(index=False, float_format="%.6f")
     figure_html = fig.to_html(full_html=False, include_plotlyjs="cdn")
     figure_distribution_html = fig_distribution.to_html(full_html=False, include_plotlyjs=False)
+    tableau_diagnostic_html = diagnostic_calibration.to_html(index=False, float_format="%.6f")
     return f"""<!DOCTYPE html>
 <html lang=\"fr\">
   <head>
@@ -673,6 +774,19 @@ def construire_html_rapport(
       {tableau_dates_html}
     </section>
 
+    <section>
+      <h2>Stabilité de densité pour la gaussienne i.i.d.</h2>
+      <p><b>Date de calibration retenue pour la gaussienne :</b> {meilleure_date_gauss.strftime("%Y-%m-%d")}</p>
+      <p>Critère : distance de Wasserstein entre densités empiriques (première moitié vs seconde moitié de la fenêtre). La première date "stable" est retenue pour limiter les mouvements de distribution.</p>
+      {tableau_dates_gauss_html}
+    </section>
+    
+    <section>
+      <h2>Diagnostic de calibration des lois</h2>
+      <p>Comparaison directe distribution historique vs tirages simulés (moyenne, volatilité et test KS à 2 échantillons). Un <i>ks_stat</i> faible indique une densité plus proche de l'historique.</p>
+      {tableau_diagnostic_html}
+    </section>
+
     <section class=\"plot-container\">
       <h2>Visualisation Monte Carlo</h2>
       <p>Le rejeu ci-dessous est recalé sur la fenêtre optimale détectée, de <b>{meilleure_date.strftime("%Y-%m-%d")}</b> à <b>{date_fin.strftime("%Y-%m-%d")}</b>.</p>
@@ -718,10 +832,18 @@ def executer_pipeline_univariee(
    )
     # meilleure_date = pd.Timestamp('1980-01-01')
     
+    resultats_dates_gauss, meilleure_date_gauss = detecter_date_stable_gaussienne(
+        serie_historique=serie,
+        fenetre_min_mois=60,
+        pas_mois=3,
+    )
+
     serie_optimale = serie.loc[meilleure_date:]
+    fenetres_calibration = {"gaussien_iid": serie.loc[meilleure_date_gauss:]}
     _, _, simulations_optimales = comparer_strategies(
         serie_historique=serie_optimale,
         n_paths=n_paths,
+        fenetres_calibration=fenetres_calibration,
         seed=seed,
     )
 
@@ -733,6 +855,10 @@ def executer_pipeline_univariee(
         serie_historique=serie_optimale,
         simulations_par_modele=simulations_optimales,
     )
+    diagnostic_calibration = _evaluer_calibration_distributions(
+        serie_historique=serie_optimale,
+        simulations_par_modele=simulations_optimales,
+    )
     rapport_html = construire_html_rapport(
         fig=fig,
         fig_distribution=fig_distribution,
@@ -741,7 +867,10 @@ def executer_pipeline_univariee(
         resultats_dates=resultats_dates,
         meilleure_date=meilleure_date,
         modele_date=modele_date,
+        resultats_dates_gauss=resultats_dates_gauss,
+        meilleure_date_gauss=meilleure_date_gauss,
         date_fin=pd.Timestamp(serie_optimale.index[-1]),
+        diagnostic_calibration=diagnostic_calibration,
     )
     figure_path = sortie / "comparaison_fidelite.html"
     figure_path.write_text(rapport_html, encoding="utf-8")
