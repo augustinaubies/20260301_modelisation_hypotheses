@@ -168,4 +168,6 @@ TACHE 2 : Modélisation indépendante de la bourse.
 
 TACHE 3 : 
 
+   [] Vérifier que les taux d'intérêts sont bien décorrélés de l'inflation avant de commencer à travailler (l'affirmation paraît forte quand même).
+
 TACHE 4 :
