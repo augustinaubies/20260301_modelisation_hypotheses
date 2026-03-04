@@ -91,3 +91,5 @@ L’agent attend alors des réponses avant toute implémentation.
 - Pour modifier les fichiers notebooks python (fichiers .ipynb), il faut d'abord faire tourner le code dans un terminal / fichier Python temporaire. Après quoi, si le résultat du code est correct, on le reporte dans les cellules du notebook. On s'assure ainsi de la cohérence du code et que le notebook peut tourner et fournir les résultats souhaités.
 
 La priorité est la robustesse et la traçabilité, pas la vitesse.
+
+Si un aperçu de la PR peut être présent, privilégier un screenshot d'un graphique. Si cela n'est pas disponible, ne pas afficher d'aperçu de la PR.

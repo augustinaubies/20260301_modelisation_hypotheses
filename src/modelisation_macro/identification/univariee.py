@@ -590,7 +590,27 @@ def construire_figure_rejeu(
     return fig
 
 
-def _calculer_kde(serie: np.ndarray, n_points: int = 300) -> tuple[np.ndarray, np.ndarray]:
+def _construire_grille_densite_commune(series: list[np.ndarray], n_points: int = 400) -> np.ndarray:
+    donnees = [np.asarray(serie, dtype=float) for serie in series if np.asarray(serie).size > 0]
+    if not donnees:
+        return np.array([0.0])
+
+    fusion = np.concatenate([serie[np.isfinite(serie)] for serie in donnees])
+    if fusion.size == 0:
+        return np.array([0.0])
+
+    xmin, xmax = float(np.quantile(fusion, 0.001)), float(np.quantile(fusion, 0.999))
+    if xmin == xmax:
+        xmin -= 1e-6
+        xmax += 1e-6
+    return np.linspace(xmin, xmax, n_points)
+
+
+def _calculer_kde(
+    serie: np.ndarray,
+    n_points: int = 300,
+    x_grid: np.ndarray | None = None,
+) -> tuple[np.ndarray, np.ndarray]:
     serie = np.asarray(serie, dtype=float)
     serie = serie[np.isfinite(serie)]
     if serie.size < 2:
@@ -598,11 +618,14 @@ def _calculer_kde(serie: np.ndarray, n_points: int = 300) -> tuple[np.ndarray, n
         y = np.array([0.0])
         return x, y
 
-    xmin, xmax = float(np.quantile(serie, 0.005)), float(np.quantile(serie, 0.995))
-    if xmin == xmax:
-        xmin -= 1e-6
-        xmax += 1e-6
-    x = np.linspace(xmin, xmax, n_points)
+    if x_grid is None:
+        xmin, xmax = float(np.quantile(serie, 0.005)), float(np.quantile(serie, 0.995))
+        if xmin == xmax:
+            xmin -= 1e-6
+            xmax += 1e-6
+        x = np.linspace(xmin, xmax, n_points)
+    else:
+        x = np.asarray(x_grid, dtype=float)
     try:
         kde = stats.gaussian_kde(serie)
         y = kde(x)
@@ -614,13 +637,24 @@ def _calculer_kde(serie: np.ndarray, n_points: int = 300) -> tuple[np.ndarray, n
 def _calculer_densite_gaussienne_theorique(
     serie_historique: pd.Series,
     n_points: int = 300,
+    x_grid: np.ndarray | None = None,
 ) -> tuple[np.ndarray, np.ndarray]:
     mu = float(serie_historique.mean())
     sigma = max(float(serie_historique.std(ddof=1)), 1e-12)
-    borne_basse, borne_haute = np.quantile(serie_historique.to_numpy(), [0.005, 0.995])
-    x = np.linspace(float(borne_basse), float(borne_haute), n_points)
+    if x_grid is None:
+        borne_basse, borne_haute = np.quantile(serie_historique.to_numpy(), [0.005, 0.995])
+        x = np.linspace(float(borne_basse), float(borne_haute), n_points)
+    else:
+        x = np.asarray(x_grid, dtype=float)
     y = stats.norm.pdf(x, loc=mu, scale=sigma)
     return x, y
+
+
+def _estimer_mode_kde(serie: np.ndarray, x_grid: np.ndarray) -> float:
+    x, y = _calculer_kde(serie, x_grid=x_grid)
+    if x.size == 0 or y.size == 0:
+        return float("nan")
+    return float(x[np.argmax(y)])
 
 
 def _evaluer_calibration_distributions(
@@ -629,16 +663,24 @@ def _evaluer_calibration_distributions(
 ) -> pd.DataFrame:
     lignes: list[dict[str, float | str]] = []
     hist = serie_historique.to_numpy(dtype=float)
+    grille_commune = _construire_grille_densite_commune([hist, *[np.asarray(sim, dtype=float).reshape(-1) for sim in simulations_par_modele.values()]])
+    mean_hist = float(np.mean(hist))
+    median_hist = float(np.median(hist))
+    mode_hist = _estimer_mode_kde(hist, grille_commune)
     for nom_modele, simulations in simulations_par_modele.items():
-        echantillon = simulations.reshape(-1)
+        echantillon = np.asarray(simulations, dtype=float).reshape(-1)
         if echantillon.size == 0:
             continue
         ks_stat, ks_pvalue = stats.ks_2samp(hist, echantillon)
         lignes.append(
             {
                 "modele": nom_modele,
-                "mean_hist": float(np.mean(hist)),
+                "mean_hist": mean_hist,
                 "mean_modele": float(np.mean(echantillon)),
+                "median_hist": median_hist,
+                "median_modele": float(np.median(echantillon)),
+                "mode_hist_kde": mode_hist,
+                "mode_modele_kde": _estimer_mode_kde(echantillon, grille_commune),
                 "std_hist": float(np.std(hist, ddof=1)),
                 "std_modele": float(np.std(echantillon, ddof=1)),
                 "ks_stat": float(ks_stat),
@@ -658,7 +700,10 @@ def construire_figure_distribution_variations(
 
     fig = go.Figure()
 
-    x_hist, y_hist = _calculer_kde(serie_historique.to_numpy())
+    variations_modeles = [np.asarray(simulations, dtype=float).reshape(-1) for simulations in simulations_par_modele.values()]
+    grille_commune = _construire_grille_densite_commune([serie_historique.to_numpy(), *variations_modeles])
+
+    x_hist, y_hist = _calculer_kde(serie_historique.to_numpy(), x_grid=grille_commune)
     fig.add_trace(
         go.Scatter(
             x=x_hist,
@@ -669,7 +714,10 @@ def construire_figure_distribution_variations(
         )
     )
 
-    x_gauss_theorique, y_gauss_theorique = _calculer_densite_gaussienne_theorique(serie_historique)
+    x_gauss_theorique, y_gauss_theorique = _calculer_densite_gaussienne_theorique(
+        serie_historique,
+        x_grid=grille_commune,
+    )
     fig.add_trace(
         go.Scatter(
             x=x_gauss_theorique,
@@ -681,8 +729,8 @@ def construire_figure_distribution_variations(
     )
 
     for nom_modele, simulations in simulations_par_modele.items():
-        variations_modele = simulations.reshape(-1)
-        x_modele, y_modele = _calculer_kde(variations_modele)
+        variations_modele = np.asarray(simulations, dtype=float).reshape(-1)
+        x_modele, y_modele = _calculer_kde(variations_modele, x_grid=grille_commune)
         fig.add_trace(
             go.Scatter(
                 x=x_modele,

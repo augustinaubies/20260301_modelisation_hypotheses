@@ -7,7 +7,9 @@ from modelisation_macro.identification.univariee import (
     comparer_strategies,
     detecter_meilleure_date_depart,
     construire_figure_rejeu,
+    construire_figure_distribution_variations,
     construire_html_rapport,
+    _evaluer_calibration_distributions,
 )
 
 
@@ -48,28 +50,30 @@ def test_construire_html_rapport_separe_bien_texte_et_graphiques() -> None:
     serie = pd.Series([0.01, -0.01, 0.02, -0.005], index=index)
     simulations = {"gaussien_iid": [[0.0, 0.01, -0.01, 0.0]]}
     fig = construire_figure_rejeu(serie_historique=serie, simulations_par_modele=simulations)
+    fig_distribution = construire_figure_distribution_variations(serie_historique=serie, simulations_par_modele=simulations)
+
     resultats = pd.DataFrame([{"modele": "gaussien_iid", "score_fidelite": 0.1}])
     resultats_dates = pd.DataFrame(
-        [
-            {
-                "date_depart": pd.Timestamp("2020-01-01"),
-                "score_fidelite": 0.05,
-                "n_observations": 48,
-            }
-        ]
+        [{"date_depart": pd.Timestamp("2020-01-01"), "score_fidelite": 0.05, "n_observations": 48}]
     )
+    diagnostic = _evaluer_calibration_distributions(serie_historique=serie, simulations_par_modele=simulations)
 
     rapport = construire_html_rapport(
         fig=fig,
+        fig_distribution=fig_distribution,
         resultats=resultats,
         meilleur_modele="gaussien_iid",
         resultats_dates=resultats_dates,
         meilleure_date=pd.Timestamp("2020-01-01"),
         modele_date="volatilite_ewma",
+        resultats_dates_gauss=resultats_dates,
+        meilleure_date_gauss=pd.Timestamp("2020-01-01"),
+        date_fin=pd.Timestamp("2020-04-01"),
+        diagnostic_calibration=diagnostic,
     )
 
     assert "<section>" in rapport
-    assert "class=\"plot-container\"" in rapport
+    assert 'class="plot-container"' in rapport
     assert "Meilleur modèle selon score global" in rapport
     assert "Meilleure date de départ" in rapport
 
@@ -88,3 +92,17 @@ def test_detecter_meilleure_date_depart_retourne_une_date_existante() -> None:
 
     assert not resultats.empty
     assert meilleure_date in serie.index
+
+
+def test_figure_distribution_utilise_une_grille_x_commune() -> None:
+    index = pd.date_range("2021-01-01", periods=12, freq="MS")
+    serie = pd.Series([0.01, 0.02, -0.01, 0.0, 0.005, 0.015, -0.005, 0.01, 0.0, 0.01, -0.002, 0.003], index=index)
+    simulations = {
+        "gaussien_iid": [[0.0, 0.01, -0.01, 0.0, 0.005, 0.002, -0.002, 0.004, 0.006, -0.001, 0.003, 0.0]],
+        "student_t_iid": [[0.015, 0.005, -0.015, 0.007, -0.003, 0.01, 0.012, -0.008, 0.004, 0.006, -0.002, 0.001]],
+    }
+
+    fig = construire_figure_distribution_variations(serie_historique=serie, simulations_par_modele=simulations)
+    x_refs = [tuple(trace.x) for trace in fig.data]
+
+    assert len(set(x_refs)) == 1
