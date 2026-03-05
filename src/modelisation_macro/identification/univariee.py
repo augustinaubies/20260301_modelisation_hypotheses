@@ -887,7 +887,15 @@ def executer_pipeline_univariee(
     )
 
     serie_optimale = serie.loc[meilleure_date:]
-    fenetres_calibration = {"gaussien_iid": serie.loc[meilleure_date_gauss:]}
+    # Toutes les lois sont calibrées sur la même fenêtre de rejeu (date optimale commune)
+    # afin d'éviter des comparaisons de densité biaisées par des horizons historiques différents.
+    fenetres_calibration = {
+        "gaussien_iid": serie_optimale,
+        "ar1_bruit_colore": serie_optimale,
+        "student_t_iid": serie_optimale,
+        "volatilite_ewma": serie_optimale,
+        "markov_switching_2_regimes": serie_optimale,
+    }
     _, _, simulations_optimales = comparer_strategies(
         serie_historique=serie_optimale,
         n_paths=n_paths,
