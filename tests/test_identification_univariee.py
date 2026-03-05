@@ -108,6 +108,42 @@ def test_figure_distribution_utilise_une_grille_x_commune() -> None:
     assert len(set(x_refs)) == 1
 
 
+
+
+def test_construire_html_rapport_affiche_reperes_densite_historiques() -> None:
+    index = pd.date_range("2020-01-01", periods=6, freq="MS")
+    serie = pd.Series([0.03, 0.02, 0.01, 0.015, 0.012, -0.08], index=index)
+    simulations = {"gaussien_iid": [[0.01, 0.012, 0.009, 0.011, 0.013, 0.008]]}
+
+    fig = construire_figure_rejeu(serie_historique=serie, simulations_par_modele=simulations)
+    diagnostic = _evaluer_calibration_distributions(serie_historique=serie, simulations_par_modele=simulations)
+    fig_distribution = construire_figure_distribution_variations(
+        serie_historique=serie,
+        simulations_par_modele=simulations,
+        diagnostic_calibration=diagnostic,
+    )
+    resultats = pd.DataFrame([{"modele": "gaussien_iid", "score_fidelite": 0.1}])
+    resultats_dates = pd.DataFrame(
+        [{"date_depart": pd.Timestamp("2020-01-01"), "score_fidelite": 0.05, "n_observations": 48}]
+    )
+
+    rapport = construire_html_rapport(
+        fig=fig,
+        fig_distribution=fig_distribution,
+        resultats=resultats,
+        meilleur_modele="gaussien_iid",
+        resultats_dates=resultats_dates,
+        meilleure_date=pd.Timestamp("2020-01-01"),
+        modele_date="volatilite_ewma",
+        resultats_dates_gauss=resultats_dates,
+        meilleure_date_gauss=pd.Timestamp("2020-01-01"),
+        date_fin=pd.Timestamp("2020-06-01"),
+        diagnostic_calibration=diagnostic,
+    )
+
+    assert "Repères historiques (fenêtre affichée)" in rapport
+    assert "skewness" in rapport
+
 def test_figure_distribution_gaussienne_theorique_utilise_diagnostic_modele() -> None:
     index = pd.date_range("2022-01-01", periods=8, freq="MS")
     serie = pd.Series([0.001, 0.002, -0.001, 0.0, 0.0015, -0.0005, 0.0008, 0.0012], index=index)

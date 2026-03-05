@@ -670,6 +670,7 @@ def _evaluer_calibration_distributions(
     grille_commune = _construire_grille_densite_commune([hist, *[np.asarray(sim, dtype=float).reshape(-1) for sim in simulations_par_modele.values()]])
     mean_hist = float(np.mean(hist))
     median_hist = float(np.median(hist))
+    skew_hist = float(stats.skew(hist, bias=False)) if hist.size > 2 else 0.0
     mode_hist = _estimer_mode_kde(hist, grille_commune)
     for nom_modele, simulations in simulations_par_modele.items():
         echantillon = np.asarray(simulations, dtype=float).reshape(-1)
@@ -683,6 +684,8 @@ def _evaluer_calibration_distributions(
                 "mean_modele": float(np.mean(echantillon)),
                 "median_hist": median_hist,
                 "median_modele": float(np.median(echantillon)),
+                "skew_hist": skew_hist,
+                "skew_modele": float(stats.skew(echantillon, bias=False)) if echantillon.size > 2 else 0.0,
                 "mode_hist_kde": mode_hist,
                 "mode_modele_kde": _estimer_mode_kde(echantillon, grille_commune),
                 "std_hist": float(np.std(hist, ddof=1)),
@@ -788,6 +791,21 @@ def construire_html_rapport(
     figure_html = fig.to_html(full_html=False, include_plotlyjs="cdn")
     figure_distribution_html = fig_distribution.to_html(full_html=False, include_plotlyjs=False)
     tableau_diagnostic_html = diagnostic_calibration.to_html(index=False, float_format="%.6f")
+
+    resume_densite = ""
+    if not diagnostic_calibration.empty:
+        ligne_ref = diagnostic_calibration.iloc[0]
+        interpretation = ""
+        if float(ligne_ref["skew_hist"]) < -0.1 and float(ligne_ref["mode_hist_kde"]) > float(ligne_ref["mean_hist"]):
+            interpretation = (
+                "La distribution historique est asymétrique à gauche : quelques chocs baissiers extrêmes "
+                "tirent la moyenne vers le bas, tandis que le centre visuel (mode KDE) reste plus à droite."
+            )
+        texte_interpretation = f"<p>{interpretation}</p>" if interpretation else ""
+        resume_densite = f"""
+      <p><b>Repères historiques (fenêtre affichée)</b> — mean: {float(ligne_ref['mean_hist']):.6f}, median: {float(ligne_ref['median_hist']):.6f}, mode KDE: {float(ligne_ref['mode_hist_kde']):.6f}, skewness: {float(ligne_ref['skew_hist']):.6f}.</p>
+      {texte_interpretation}
+"""
     return f"""<!DOCTYPE html>
 <html lang=\"fr\">
   <head>
@@ -859,6 +877,7 @@ def construire_html_rapport(
     <section class=\"plot-container\">
       <h2>Distribution des variations mensuelles</h2>
       <p>Cette courbe compare la densité des variations mensuelles historiques avec l'ensemble des tirages Monte Carlo de chaque stratégie.</p>
+      {resume_densite}
       {figure_distribution_html}
     </section>
   </body>
