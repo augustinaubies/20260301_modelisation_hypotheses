@@ -106,3 +106,24 @@ def test_figure_distribution_utilise_une_grille_x_commune() -> None:
     x_refs = [tuple(trace.x) for trace in fig.data]
 
     assert len(set(x_refs)) == 1
+
+
+def test_figure_distribution_gaussienne_theorique_utilise_diagnostic_modele() -> None:
+    index = pd.date_range("2022-01-01", periods=8, freq="MS")
+    serie = pd.Series([0.001, 0.002, -0.001, 0.0, 0.0015, -0.0005, 0.0008, 0.0012], index=index)
+    simulations = {"gaussien_iid": [[0.02, 0.021, 0.019, 0.02, 0.022, 0.018, 0.02, 0.021]]}
+    diagnostic = _evaluer_calibration_distributions(serie_historique=serie, simulations_par_modele=simulations)
+
+    fig = construire_figure_distribution_variations(
+        serie_historique=serie,
+        simulations_par_modele=simulations,
+        diagnostic_calibration=diagnostic,
+    )
+
+    trace_gauss = next(trace for trace in fig.data if trace.name == "gaussienne théorique (fit historique)")
+    x = pd.Series(trace_gauss.x, dtype=float)
+    y = pd.Series(trace_gauss.y, dtype=float)
+    x_mode = float(x.iloc[int(y.idxmax())])
+
+    mean_modele = float(diagnostic.loc[diagnostic["modele"] == "gaussien_iid", "mean_modele"].iloc[0])
+    assert abs(x_mode - mean_modele) < 1e-3

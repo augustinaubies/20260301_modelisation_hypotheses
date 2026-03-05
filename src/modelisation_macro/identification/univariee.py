@@ -638,9 +638,13 @@ def _calculer_densite_gaussienne_theorique(
     serie_historique: pd.Series,
     n_points: int = 300,
     x_grid: np.ndarray | None = None,
+    mu: float | None = None,
+    sigma: float | None = None,
 ) -> tuple[np.ndarray, np.ndarray]:
-    mu = float(serie_historique.mean())
-    sigma = max(float(serie_historique.std(ddof=1)), 1e-12)
+    mu = float(serie_historique.mean()) if mu is None else float(mu)
+    sigma_hist = float(serie_historique.std(ddof=1))
+    sigma = sigma_hist if sigma is None else float(sigma)
+    sigma = max(sigma, 1e-12)
     if x_grid is None:
         borne_basse, borne_haute = np.quantile(serie_historique.to_numpy(), [0.005, 0.995])
         x = np.linspace(float(borne_basse), float(borne_haute), n_points)
@@ -694,6 +698,7 @@ def _evaluer_calibration_distributions(
 def construire_figure_distribution_variations(
     serie_historique: pd.Series,
     simulations_par_modele: dict[str, np.ndarray],
+    diagnostic_calibration: pd.DataFrame | None = None,
 ) -> go.Figure:
     palette = px.colors.qualitative.Plotly
     couleurs = {nom: palette[idx % len(palette)] for idx, nom in enumerate(simulations_par_modele.keys())}
@@ -714,9 +719,19 @@ def construire_figure_distribution_variations(
         )
     )
 
+    mu_gauss = None
+    sigma_gauss = None
+    if diagnostic_calibration is not None and not diagnostic_calibration.empty:
+        ligne_gauss = diagnostic_calibration.loc[diagnostic_calibration["modele"] == "gaussien_iid"]
+        if not ligne_gauss.empty:
+            mu_gauss = float(ligne_gauss.iloc[0]["mean_modele"])
+            sigma_gauss = float(ligne_gauss.iloc[0]["std_modele"])
+
     x_gauss_theorique, y_gauss_theorique = _calculer_densite_gaussienne_theorique(
         serie_historique,
         x_grid=grille_commune,
+        mu=mu_gauss,
+        sigma=sigma_gauss,
     )
     fig.add_trace(
         go.Scatter(
@@ -906,14 +921,15 @@ def executer_pipeline_univariee(
     sortie = Path(dossier_sortie)
     sortie.mkdir(parents=True, exist_ok=True)
 
+    diagnostic_calibration = _evaluer_calibration_distributions(
+        serie_historique=serie_optimale,
+        simulations_par_modele=simulations_optimales,
+    )
     fig = construire_figure_rejeu(serie_historique=serie_optimale, simulations_par_modele=simulations_optimales)
     fig_distribution = construire_figure_distribution_variations(
         serie_historique=serie_optimale,
         simulations_par_modele=simulations_optimales,
-    )
-    diagnostic_calibration = _evaluer_calibration_distributions(
-        serie_historique=serie_optimale,
-        simulations_par_modele=simulations_optimales,
+        diagnostic_calibration=diagnostic_calibration,
     )
     rapport_html = construire_html_rapport(
         fig=fig,
