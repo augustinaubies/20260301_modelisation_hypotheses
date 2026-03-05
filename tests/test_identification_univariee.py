@@ -27,6 +27,8 @@ def test_comparer_strategies_retourne_modele_existant() -> None:
         "gaussien_iid",
         "ar1_bruit_colore",
         "student_t_iid",
+        "skew_t_asymetrique_iid",
+        "skew_t_asymetrique_nu_inf",
         "volatilite_ewma",
         "markov_switching_2_regimes",
     }

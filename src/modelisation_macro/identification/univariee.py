@@ -83,6 +83,52 @@ class ModeleStudentTIID:
 
 
 @dataclass(slots=True)
+class ModeleSkewTIID:
+    a: float
+    b: float
+    mu: float
+    sigma: float
+
+    @classmethod
+    def calibrer(cls, serie: pd.Series) -> "ModeleSkewTIID":
+        a, b, mu, sigma = stats.jf_skew_t.fit(serie.to_numpy(dtype=float))
+        return cls(a=float(a), b=float(b), mu=float(mu), sigma=float(sigma))
+
+    def simuler(self, n_periodes: int, n_paths: int, seed: int | None = None) -> np.ndarray:
+        rng = np.random.default_rng(seed)
+        return stats.jf_skew_t.rvs(
+            self.a,
+            self.b,
+            loc=self.mu,
+            scale=max(self.sigma, 1e-12),
+            size=(n_paths, n_periodes),
+            random_state=rng,
+        )
+
+
+@dataclass(slots=True)
+class ModeleSkewNormNuInfIID:
+    a: float
+    mu: float
+    sigma: float
+
+    @classmethod
+    def calibrer(cls, serie: pd.Series) -> "ModeleSkewNormNuInfIID":
+        a, mu, sigma = stats.skewnorm.fit(serie.to_numpy(dtype=float))
+        return cls(a=float(a), mu=float(mu), sigma=float(sigma))
+
+    def simuler(self, n_periodes: int, n_paths: int, seed: int | None = None) -> np.ndarray:
+        rng = np.random.default_rng(seed)
+        return stats.skewnorm.rvs(
+            self.a,
+            loc=self.mu,
+            scale=max(self.sigma, 1e-12),
+            size=(n_paths, n_periodes),
+            random_state=rng,
+        )
+
+
+@dataclass(slots=True)
 class ModeleVolatiliteEWMA:
     mu: float
     lambda_vol: float
@@ -252,6 +298,8 @@ def comparer_strategies(
     serie_gauss = fenetres_calibration.get("gaussien_iid", serie_historique)
     serie_ar1 = fenetres_calibration.get("ar1_bruit_colore", serie_historique)
     serie_student = fenetres_calibration.get("student_t_iid", serie_historique)
+    serie_skew_t = fenetres_calibration.get("skew_t_asymetrique_iid", serie_historique)
+    serie_skew_nu_inf = fenetres_calibration.get("skew_t_asymetrique_nu_inf", serie_historique)
     serie_vol = fenetres_calibration.get("volatilite_ewma", serie_historique)
     serie_markov = fenetres_calibration.get("markov_switching_2_regimes", serie_historique)
 
@@ -273,6 +321,20 @@ def comparer_strategies(
         seed=None if seed is None else seed + 2,
     )
 
+    modele_skew_t = ModeleSkewTIID.calibrer(serie_skew_t)
+    sims_skew_t = modele_skew_t.simuler(
+        n_periodes=n_periodes,
+        n_paths=n_paths,
+        seed=None if seed is None else seed + 5,
+    )
+
+    modele_skew_nu_inf = ModeleSkewNormNuInfIID.calibrer(serie_skew_nu_inf)
+    sims_skew_nu_inf = modele_skew_nu_inf.simuler(
+        n_periodes=n_periodes,
+        n_paths=n_paths,
+        seed=None if seed is None else seed + 6,
+    )
+
     modele_vol = ModeleVolatiliteEWMA.calibrer(serie_vol)
     sims_vol = modele_vol.simuler(
         n_periodes=n_periodes,
@@ -291,6 +353,8 @@ def comparer_strategies(
         "gaussien_iid": sims_iid,
         "ar1_bruit_colore": sims_ar1,
         "student_t_iid": sims_student,
+        "skew_t_asymetrique_iid": sims_skew_t,
+        "skew_t_asymetrique_nu_inf": sims_skew_nu_inf,
         "volatilite_ewma": sims_vol,
         "markov_switching_2_regimes": sims_markov,
     }
@@ -350,6 +414,12 @@ def _simuler_pour_modele(
 
     if nom_modele == "volatilite_ewma":
         return ModeleVolatiliteEWMA.calibrer(serie_historique).simuler(n_periodes=n_periodes, n_paths=n_paths, seed=seed)
+
+    if nom_modele == "skew_t_asymetrique_iid":
+        return ModeleSkewTIID.calibrer(serie_historique).simuler(n_periodes=n_periodes, n_paths=n_paths, seed=seed)
+
+    if nom_modele == "skew_t_asymetrique_nu_inf":
+        return ModeleSkewNormNuInfIID.calibrer(serie_historique).simuler(n_periodes=n_periodes, n_paths=n_paths, seed=seed)
 
     if nom_modele == "markov_switching_2_regimes":
         return ModeleMarkovSwitching.calibrer(serie_historique).simuler(n_periodes=n_periodes, n_paths=n_paths, seed=seed)
@@ -836,6 +906,8 @@ def construire_html_rapport(
         <li><b>Gaussien i.i.d.</b> : baseline simple, sous-estime les queues épaisses.</li>
         <li><b>AR(1)</b> : capture une partie de la persistance moyenne, mais pas la volatilité conditionnelle.</li>
         <li><b>Student-t i.i.d.</b> : améliore la modélisation des extrêmes (queues épaisses).</li>
+        <li><b>Skew-t asymétrique</b> : capte simultanément asymétrie et queues épaisses observées.</li>
+        <li><b>Skew-t ν→∞ (proxy skew-normal)</b> : test de version sans queues épaisses pour comparer la nécessité des extrêmes.</li>
         <li><b>Volatilité EWMA</b> : proxy GARCH léger, robuste et sans dépendance lourde.</li>
         <li><b>Markov-switching 2 régimes</b> : pertinent si alternance de régimes drift/vol détectable.</li>
       </ul>
@@ -927,6 +999,8 @@ def executer_pipeline_univariee(
         "gaussien_iid": serie_optimale,
         "ar1_bruit_colore": serie_optimale,
         "student_t_iid": serie_optimale,
+        "skew_t_asymetrique_iid": serie_optimale,
+        "skew_t_asymetrique_nu_inf": serie_optimale,
         "volatilite_ewma": serie_optimale,
         "markov_switching_2_regimes": serie_optimale,
     }
