@@ -7,6 +7,7 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
+from scipy.optimize import minimize
 from scipy import stats
 from statsmodels.tsa.regime_switching.markov_regression import MarkovRegression
 
@@ -212,6 +213,185 @@ class ModeleMarkovSwitching:
         return simulations
 
 
+@dataclass(slots=True)
+class ModeleMarkovSwitchingSkewT:
+    transition: np.ndarray
+    mu: np.ndarray
+    sigma: np.ndarray
+    a: np.ndarray
+    b: np.ndarray
+    proba_initiale: np.ndarray
+    log_likelihood: float
+    aic: float
+    bic: float
+    filtered_probabilities: np.ndarray
+    smoothed_probabilities: np.ndarray
+
+    @staticmethod
+    def _logistic(x: float) -> float:
+        return 1.0 / (1.0 + np.exp(-x))
+
+    @classmethod
+    def _construire_parametres(
+        cls,
+        theta: np.ndarray,
+        reduced: bool,
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+        p00 = np.clip(cls._logistic(float(theta[0])), 1e-6, 1 - 1e-6)
+        p11 = np.clip(cls._logistic(float(theta[1])), 1e-6, 1 - 1e-6)
+        transition = np.array([[p00, 1.0 - p00], [1.0 - p11, p11]], dtype=float)
+
+        mu = np.array([theta[2], theta[3]], dtype=float)
+        sigma = np.exp(np.array([theta[4], theta[5]], dtype=float))
+
+        if reduced:
+            a_shared = float(np.clip(np.exp(theta[6]), 1e-3, 50.0))
+            b_shared = float(np.clip(np.exp(theta[7]), 1e-3, 50.0))
+            a = np.array([a_shared, a_shared], dtype=float)
+            b = np.array([b_shared, b_shared], dtype=float)
+        else:
+            a = np.clip(np.exp(np.array([theta[6], theta[7]], dtype=float)), 1e-3, 50.0)
+            b = np.clip(np.exp(np.array([theta[8], theta[9]], dtype=float)), 1e-3, 50.0)
+
+        delta = max(1.0 - p00 - p11, 1e-6)
+        proba_initiale = np.array([(1.0 - p11) / delta, (1.0 - p00) / delta], dtype=float)
+        proba_initiale = np.clip(proba_initiale, 1e-6, 1.0)
+        proba_initiale = proba_initiale / proba_initiale.sum()
+        return transition, mu, sigma, a, b, proba_initiale
+
+    @staticmethod
+    def _log_emissions(y: np.ndarray, mu: np.ndarray, sigma: np.ndarray, a: np.ndarray, b: np.ndarray) -> np.ndarray:
+        log_emissions = np.zeros((2, y.size), dtype=float)
+        for k in range(2):
+            log_emissions[k] = stats.jf_skew_t.logpdf(y, a[k], b[k], loc=mu[k], scale=max(sigma[k], 1e-12))
+        return np.nan_to_num(log_emissions, neginf=-1e12, posinf=-1e12)
+
+    @classmethod
+    def _hamilton_filtre_lisse(
+        cls,
+        y: np.ndarray,
+        transition: np.ndarray,
+        mu: np.ndarray,
+        sigma: np.ndarray,
+        a: np.ndarray,
+        b: np.ndarray,
+        proba_initiale: np.ndarray,
+    ) -> tuple[float, np.ndarray, np.ndarray]:
+        n = y.size
+        if n == 0:
+            return -np.inf, np.zeros((0, 2)), np.zeros((0, 2))
+
+        emissions = np.exp(cls._log_emissions(y=y, mu=mu, sigma=sigma, a=a, b=b))
+        filtered = np.zeros((n, 2), dtype=float)
+        predicted = np.zeros((n, 2), dtype=float)
+        c = np.zeros(n, dtype=float)
+
+        predicted[0] = proba_initiale
+        numerateur0 = predicted[0] * emissions[:, 0]
+        c[0] = max(numerateur0.sum(), 1e-300)
+        filtered[0] = numerateur0 / c[0]
+
+        for t in range(1, n):
+            predicted[t] = filtered[t - 1] @ transition
+            numerateur = predicted[t] * emissions[:, t]
+            c[t] = max(numerateur.sum(), 1e-300)
+            filtered[t] = numerateur / c[t]
+
+        ll = float(np.sum(np.log(c)))
+
+        smoothed = np.zeros_like(filtered)
+        smoothed[-1] = filtered[-1]
+        for t in range(n - 2, -1, -1):
+            ratio = smoothed[t + 1] / np.clip(predicted[t + 1], 1e-300, None)
+            smoothed[t] = filtered[t] * (transition @ ratio)
+            denom = max(smoothed[t].sum(), 1e-300)
+            smoothed[t] /= denom
+
+        return ll, filtered, smoothed
+
+    @classmethod
+    def calibrer(
+        cls,
+        serie: pd.Series,
+        reduced: bool = True,
+        n_starts: int = 8,
+        seed: int | None = 42,
+    ) -> "ModeleMarkovSwitchingSkewT":
+        y = serie.to_numpy(dtype=float)
+        if y.size < 10:
+            seuil = float(np.median(y)) if y.size else 0.0
+            regime0 = y[y <= seuil] if y.size else np.array([0.0])
+            regime1 = y[y > seuil] if y.size else np.array([0.0])
+            mu = np.array([float(np.mean(regime0)), float(np.mean(regime1))], dtype=float)
+            sigma = np.array([
+                max(float(np.std(regime0, ddof=1)) if regime0.size > 1 else 1e-3, 1e-6),
+                max(float(np.std(regime1, ddof=1)) if regime1.size > 1 else 1e-3, 1e-6),
+            ])
+            a = np.array([2.0, 2.0], dtype=float)
+            b = np.array([2.0, 2.0], dtype=float)
+            transition = np.array([[0.95, 0.05], [0.05, 0.95]], dtype=float)
+            proba_initiale = np.array([0.5, 0.5], dtype=float)
+            ll, filtered, smoothed = cls._hamilton_filtre_lisse(y, transition, mu, sigma, a, b, proba_initiale)
+            k = 8 if reduced else 10
+            return cls(transition, mu, sigma, a, b, proba_initiale, ll, 2 * k - 2 * ll, k * np.log(max(y.size, 1)) - 2 * ll, filtered, smoothed)
+
+        rng = np.random.default_rng(seed)
+        mu0, sigma0 = float(np.mean(y)), max(float(np.std(y, ddof=1)), 1e-4)
+        a0, b0, _, _ = stats.jf_skew_t.fit(y)
+
+        best: tuple[float, np.ndarray] | None = None
+        nb_params = 8 if reduced else 10
+
+        def objective(theta: np.ndarray) -> float:
+            transition, mu, sigma, a, b, proba_initiale = cls._construire_parametres(theta=theta, reduced=reduced)
+            ll, _, _ = cls._hamilton_filtre_lisse(y, transition, mu, sigma, a, b, proba_initiale)
+            if not np.isfinite(ll):
+                return 1e12
+            return -ll
+
+        for i in range(max(n_starts, 1)):
+            perturb = rng.normal(0.0, 0.35, size=nb_params)
+            init = np.zeros(nb_params, dtype=float)
+            init[0:2] = np.array([2.2, 2.0]) + perturb[0:2]
+            init[2:4] = np.array([mu0 - 0.5 * sigma0, mu0 + 0.5 * sigma0]) + sigma0 * perturb[2:4]
+            init[4:6] = np.log(np.array([0.7 * sigma0, 1.3 * sigma0])) + perturb[4:6]
+            if reduced:
+                init[6:8] = np.log(np.array([max(float(a0), 1e-3), max(float(b0), 1e-3)])) + 0.2 * perturb[6:8]
+            else:
+                init[6:10] = np.log(np.array([max(float(a0), 1e-3), max(float(a0), 1e-3), max(float(b0), 1e-3), max(float(b0), 1e-3)])) + 0.2 * perturb[6:10]
+
+            opt = minimize(objective, init, method="L-BFGS-B", options={"maxiter": 350})
+            val = float(opt.fun) if np.isfinite(opt.fun) else 1e12
+            if best is None or val < best[0]:
+                best = (val, np.asarray(opt.x, dtype=float))
+
+        if best is None:
+            raise RuntimeError("Echec de calibration MS(2)-Skew-t")
+
+        transition, mu, sigma, a, b, proba_initiale = cls._construire_parametres(theta=best[1], reduced=reduced)
+        ll, filtered, smoothed = cls._hamilton_filtre_lisse(y, transition, mu, sigma, a, b, proba_initiale)
+        k = nb_params
+        aic = float(2 * k - 2 * ll)
+        bic = float(k * np.log(y.size) - 2 * ll)
+        return cls(transition, mu, sigma, a, b, proba_initiale, ll, aic, bic, filtered, smoothed)
+
+    def simuler(self, n_periodes: int, n_paths: int, seed: int | None = None) -> np.ndarray:
+        rng = np.random.default_rng(seed)
+        simulations = np.zeros((n_paths, n_periodes), dtype=float)
+        for path_idx in range(n_paths):
+            etat = int(rng.choice([0, 1], p=self.proba_initiale))
+            for t in range(n_periodes):
+                simulations[path_idx, t] = stats.jf_skew_t.rvs(
+                    self.a[etat],
+                    self.b[etat],
+                    loc=self.mu[etat],
+                    scale=max(self.sigma[etat], 1e-12),
+                    random_state=rng,
+                )
+                etat = int(rng.choice([0, 1], p=self.transition[etat]))
+        return simulations
+
+
 def charger_et_preparer_serie(
     chemin_csv: str,
     colonne_date: str,
@@ -302,6 +482,7 @@ def comparer_strategies(
     serie_skew_nu_inf = fenetres_calibration.get("skew_t_asymetrique_nu_inf", serie_historique)
     serie_vol = fenetres_calibration.get("volatilite_ewma", serie_historique)
     serie_markov = fenetres_calibration.get("markov_switching_2_regimes", serie_historique)
+    serie_markov_skew_t = fenetres_calibration.get("markov_switching_2_regimes_skew_t", serie_historique)
 
     modele_iid = ModeleGaussienIID.calibrer(serie_gauss)
     sims_iid = modele_iid.simuler(n_periodes=n_periodes, n_paths=n_paths, seed=seed)
@@ -349,6 +530,13 @@ def comparer_strategies(
         seed=None if seed is None else seed + 4,
     )
 
+    modele_markov_skew_t = ModeleMarkovSwitchingSkewT.calibrer(serie_markov_skew_t)
+    sims_markov_skew_t = modele_markov_skew_t.simuler(
+        n_periodes=n_periodes,
+        n_paths=n_paths,
+        seed=None if seed is None else seed + 7,
+    )
+
     simulations_par_modele = {
         "gaussien_iid": sims_iid,
         "ar1_bruit_colore": sims_ar1,
@@ -357,6 +545,7 @@ def comparer_strategies(
         "skew_t_asymetrique_nu_inf": sims_skew_nu_inf,
         "volatilite_ewma": sims_vol,
         "markov_switching_2_regimes": sims_markov,
+        "markov_switching_2_regimes_skew_t": sims_markov_skew_t,
     }
 
     lignes: list[dict[str, float | str]] = []
@@ -423,6 +612,9 @@ def _simuler_pour_modele(
 
     if nom_modele == "markov_switching_2_regimes":
         return ModeleMarkovSwitching.calibrer(serie_historique).simuler(n_periodes=n_periodes, n_paths=n_paths, seed=seed)
+
+    if nom_modele == "markov_switching_2_regimes_skew_t":
+        return ModeleMarkovSwitchingSkewT.calibrer(serie_historique).simuler(n_periodes=n_periodes, n_paths=n_paths, seed=seed)
 
     raise ValueError(f"Modèle inconnu pour simulation: {nom_modele}")
 
@@ -854,6 +1046,7 @@ def construire_html_rapport(
     meilleure_date_gauss: pd.Timestamp,
     date_fin: pd.Timestamp,
     diagnostic_calibration: pd.DataFrame,
+    markov_skew_t_resume_html: str = "",
 ) -> str:
     tableau_html = resultats.to_html(index=False, float_format="%.6f")
     tableau_dates_html = resultats_dates.head(10).to_html(index=False, float_format="%.6f")
@@ -876,6 +1069,7 @@ def construire_html_rapport(
       <p><b>Repères historiques (fenêtre affichée)</b> — mean: {float(ligne_ref['mean_hist']):.6f}, median: {float(ligne_ref['median_hist']):.6f}, mode KDE: {float(ligne_ref['mode_hist_kde']):.6f}, skewness: {float(ligne_ref['skew_hist']):.6f}.</p>
       {texte_interpretation}
 """
+    section_markov_skew_t = markov_skew_t_resume_html if markov_skew_t_resume_html else ""
     return f"""<!DOCTYPE html>
 <html lang=\"fr\">
   <head>
@@ -910,6 +1104,7 @@ def construire_html_rapport(
         <li><b>Skew-t ν→∞ (proxy skew-normal)</b> : test de version sans queues épaisses pour comparer la nécessité des extrêmes.</li>
         <li><b>Volatilité EWMA</b> : proxy GARCH léger, robuste et sans dépendance lourde.</li>
         <li><b>Markov-switching 2 régimes</b> : pertinent si alternance de régimes drift/vol détectable.</li>
+        <li><b>Markov-switching 2 régimes + skew-t</b> : combine changements de régimes et asymétrie/queues épaisses par régime.</li>
       </ul>
     </section>
 
@@ -934,6 +1129,8 @@ def construire_html_rapport(
       {tableau_dates_gauss_html}
     </section>
     
+    {section_markov_skew_t}
+
     <section>
       <h2>Diagnostic de calibration des lois</h2>
       <p>Comparaison directe distribution historique vs tirages simulés (moyenne, volatilité et test KS à 2 échantillons). Un <i>ks_stat</i> faible indique une densité plus proche de l'historique.</p>
@@ -954,6 +1151,22 @@ def construire_html_rapport(
     </section>
   </body>
 </html>
+"""
+
+
+def _construire_section_markov_skew_t(modele: ModeleMarkovSwitchingSkewT) -> str:
+    p00 = float(modele.transition[0, 0])
+    p11 = float(modele.transition[1, 1])
+    duree0 = 1.0 / max(1.0 - p00, 1e-6)
+    duree1 = 1.0 / max(1.0 - p11, 1e-6)
+    return f"""
+    <section>
+      <h2>MS(2)-Skew-t : paramètres estimés</h2>
+      <p><b>Log-likelihood:</b> {modele.log_likelihood:.3f} | <b>AIC:</b> {modele.aic:.3f} | <b>BIC:</b> {modele.bic:.3f}</p>
+      <p><b>Transition:</b> [[{modele.transition[0,0]:.4f}, {modele.transition[0,1]:.4f}], [{modele.transition[1,0]:.4f}, {modele.transition[1,1]:.4f}]]</p>
+      <p><b>Durées moyennes (mois):</b> régime 0 = {duree0:.2f}, régime 1 = {duree1:.2f}</p>
+      <p><b>Paramètres émission</b> — μ: [{modele.mu[0]:.6f}, {modele.mu[1]:.6f}], σ: [{modele.sigma[0]:.6f}, {modele.sigma[1]:.6f}], a: [{modele.a[0]:.4f}, {modele.a[1]:.4f}], b: [{modele.b[0]:.4f}, {modele.b[1]:.4f}]</p>
+    </section>
 """
 
 
@@ -1003,6 +1216,7 @@ def executer_pipeline_univariee(
         "skew_t_asymetrique_nu_inf": serie_optimale,
         "volatilite_ewma": serie_optimale,
         "markov_switching_2_regimes": serie_optimale,
+        "markov_switching_2_regimes_skew_t": serie_optimale,
     }
     _, _, simulations_optimales = comparer_strategies(
         serie_historique=serie_optimale,
@@ -1024,6 +1238,7 @@ def executer_pipeline_univariee(
         simulations_par_modele=simulations_optimales,
         diagnostic_calibration=diagnostic_calibration,
     )
+    modele_markov_skew_t_resume = ModeleMarkovSwitchingSkewT.calibrer(serie_optimale)
     rapport_html = construire_html_rapport(
         fig=fig,
         fig_distribution=fig_distribution,
@@ -1036,6 +1251,7 @@ def executer_pipeline_univariee(
         meilleure_date_gauss=meilleure_date_gauss,
         date_fin=pd.Timestamp(serie_optimale.index[-1]),
         diagnostic_calibration=diagnostic_calibration,
+        markov_skew_t_resume_html=_construire_section_markov_skew_t(modele_markov_skew_t_resume),
     )
     figure_path = sortie / "comparaison_fidelite.html"
     figure_path.write_text(rapport_html, encoding="utf-8")

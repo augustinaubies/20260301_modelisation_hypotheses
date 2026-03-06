@@ -178,15 +178,16 @@ TACHE 2 : Modélisation indépendante de la bourse.
       - Diagnostic explicité dans le rapport HTML: ajout des repères mean/median/mode KDE/skewness historiques et interprétation automatique de l'asymétrie (queue baissière) quand le mode visuel est supérieur à la moyenne.
       [X] Effectivement les outils de diagnostic ont bien aidé, la courbe est en fait skewed de manière importante vers le négatif. La bonne modélisation est donc la student-t asymétrique (skew-t), qui est déjà implémentée normalement. Il faut alors vérifier si son paramétrage est correct, et tester d'enelver les queues épaisses (mettre nu très grand) pour essayer de fitter au maximum la distribution hisotrique sur la fenêtre historique.
       - Ajout de deux stratégies dédiées à l'asymétrie: `skew_t_asymetrique_iid` (Jones-Faddy skew-t calibrée sur l'historique) et `skew_t_asymetrique_nu_inf` (proxy ν→∞ via skew-normal) pour comparer explicitement avec/sans queues épaisses sur la même fenêtre optimale.
-   [] Identification Markov Switching(2)-Skew-t (rendements)
-      [] Définir le périmètre, données et métrique de “fit”.
-      Fixer la série cible (log-returns mensuels), la fenêtre de train, et le modèle exact (MS(2)-Skew-t : quels paramètres varient par régime). Définir une métrique unique de sélection (log-vraisemblance pénalisée AIC/BIC).
-      [] Implémenter le modèle MS(2)-Skew-t et le filtre (Hamilton).
-      Coder la densité log de la skew-t (paramétrage stable) et le filtre avant/arrière pour obtenir les probabilités filtrées/lissées des régimes et la log-likelihood. Exposer une API fit(serie) -> params, probas, ll.
-      [] Optimisation robuste des paramètres.
-      Mettre en place une estimation par maximum de vraisemblance avec contraintes (σ>0, ν>2, α borné, P stochastique) + multi-start pour éviter les minima locaux. Fournir une variante “réduite” (seulement σ_k et μ_k varient) activable par flag pour stabiliser si besoin.
-      [] Intégration pipeline + rapport HTML unique.
-      Intégrer le modèle comme une stratégie dans la pipeline d’identification comme une nouvelle stratégie parmi toutes les autres. Le rapport doit inclure une nouvelle section sur cette méthode détaillant les params estimés, matrice de transition + durées moyennes de régimes.
+   [X] Identification Markov Switching(2)-Skew-t (rendements)
+      [X] Définir le périmètre, données et métrique de “fit”.
+      - Série cible fixée aux log-returns mensuels avec calibration sur la même fenêtre optimale que les autres stratégies; métriques exposées: log-likelihood + AIC/BIC.
+      [X] Implémenter le modèle MS(2)-Skew-t et le filtre (Hamilton).
+      - Nouveau modèle `ModeleMarkovSwitchingSkewT` avec densité Jones-Faddy skew-t par régime et filtre/lissage Hamilton (probabilités filtrées/lissées + log-likelihood).
+      [X] Optimisation robuste des paramètres.
+      - Estimation MLE contrainte via reparamétrisation (σ>0, matrice de transition stochastique) et multi-start; variante `reduced=True` (paramètres de skew-t partagés) activable.
+      [X] Intégration pipeline + rapport HTML unique.
+      - Stratégie `markov_switching_2_regimes_skew_t` intégrée à la comparaison globale + figures/distributions; section descriptive ajoutée dans le rapport.
+      [] Il faudrait légèrement augmenter les queues épaisses et skew légèrement plus vers la gauche pour pouvoir être pas trop optimiste sur la performance des marchés en moyenne. Je ne sais pas s'il y a moyen d'induire ce comportement sans être trop "manuel" ou brutal.
    [] Une fois que ces histoires de densité de probabilités sont corrigés, il faudra voir si l'on préfère prendre la meilleure date selon la méthode EWMA ou le "déplacement de gaussienne".
       [] D'ailleurs il faut vérifier que l'implémentation actuelle de la seconde méthode correspond à : on fait une fenêtre qui part de la période actuelle sur disons 20 ans, puis on la fait grandir de plus en plus, et on regarde à quel point la distribution de proba des retours mensuels évolue, et on décide alors de la date à partir de laquelle la distribution de proba a trop évolué, et on arrête de retourner dans le passé. Cette date doit alors servir à l'optimisation des hyperparamètres de toutes les lois (vraiment toutes sans exception), puis à l'affichage des courbes, des résultats et des stats sur le rapport final.
 

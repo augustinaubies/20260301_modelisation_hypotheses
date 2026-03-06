@@ -10,6 +10,7 @@ from modelisation_macro.identification.univariee import (
     construire_figure_distribution_variations,
     construire_html_rapport,
     _evaluer_calibration_distributions,
+    ModeleMarkovSwitchingSkewT,
 )
 
 
@@ -31,6 +32,7 @@ def test_comparer_strategies_retourne_modele_existant() -> None:
         "skew_t_asymetrique_nu_inf",
         "volatilite_ewma",
         "markov_switching_2_regimes",
+        "markov_switching_2_regimes_skew_t",
     }
     assert meilleur_modele in modeles
     assert set(simulations.keys()) == modeles
@@ -165,3 +167,18 @@ def test_figure_distribution_gaussienne_theorique_utilise_diagnostic_modele() ->
 
     mean_modele = float(diagnostic.loc[diagnostic["modele"] == "gaussien_iid", "mean_modele"].iloc[0])
     assert abs(x_mode - mean_modele) < 1e-3
+
+
+def test_modele_markov_switching_skew_t_calibrer_retourne_probabilites_valides() -> None:
+    index = pd.date_range("2018-01-01", periods=48, freq="MS")
+    serie = pd.Series([0.01 if i % 12 < 8 else -0.03 for i in range(48)], index=index)
+
+    modele = ModeleMarkovSwitchingSkewT.calibrer(serie, reduced=True, n_starts=3, seed=123)
+
+    assert modele.transition.shape == (2, 2)
+    assert modele.filtered_probabilities.shape == (len(serie), 2)
+    assert modele.smoothed_probabilities.shape == (len(serie), 2)
+    assert (modele.transition >= 0).all()
+    assert abs(float(modele.transition[0].sum()) - 1.0) < 1e-9
+    assert abs(float(modele.transition[1].sum()) - 1.0) < 1e-9
+    assert abs(float(modele.proba_initiale.sum()) - 1.0) < 1e-9
