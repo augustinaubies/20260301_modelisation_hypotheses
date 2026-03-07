@@ -1193,7 +1193,7 @@ def executer_pipeline_univariee(
         inclure_markov_skew_t=inclure_markov_skew_t,
         seed=seed,
     )
-    modele_date = "volatilite_ewma"
+    modele_date = "skew_t_asymetrique_iid"
     resultats_dates, meilleure_date = detecter_meilleure_date_depart(
        serie_historique=serie,
        modele_a_tester=modele_date,
@@ -1202,7 +1202,7 @@ def executer_pipeline_univariee(
        n_paths=min(n_paths, 120),
        seed=seed,
    )
-    meilleure_date = pd.Timestamp('1980-01-01')
+    #meilleure_date = pd.Timestamp('1980-01-01')
     
     resultats_dates_gauss, meilleure_date_gauss = detecter_date_stable_gaussienne(
         serie_historique=serie,
