@@ -29,6 +29,11 @@ def construire_parseur() -> argparse.ArgumentParser:
     )
     parser.add_argument("--n-paths", type=int, default=1000, help="Nombre de tirages Monte Carlo")
     parser.add_argument("--seed", type=int, default=42, help="Seed aléatoire")
+    parser.add_argument(
+        "--inclure-markov-skew-t",
+        action="store_true",
+        help="Active la stratégie Markov Switching Skew-t (plus coûteuse en calcul).",
+    )
     return parser
 
 
@@ -41,6 +46,7 @@ def main() -> None:
         dossier_sortie=args.output_dir,
         n_paths=args.n_paths,
         seed=args.seed,
+        inclure_markov_skew_t=args.inclure_markov_skew_t,
     )
     print("Pipeline terminée.")
     print(resultats.to_string(index=False))

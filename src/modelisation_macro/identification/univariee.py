@@ -314,7 +314,8 @@ class ModeleMarkovSwitchingSkewT:
         cls,
         serie: pd.Series,
         reduced: bool = True,
-        n_starts: int = 8,
+        n_starts: int = 4,
+        maxiter: int = 150,
         seed: int | None = 42,
     ) -> "ModeleMarkovSwitchingSkewT":
         y = serie.to_numpy(dtype=float)
@@ -360,7 +361,7 @@ class ModeleMarkovSwitchingSkewT:
             else:
                 init[6:10] = np.log(np.array([max(float(a0), 1e-3), max(float(a0), 1e-3), max(float(b0), 1e-3), max(float(b0), 1e-3)])) + 0.2 * perturb[6:10]
 
-            opt = minimize(objective, init, method="L-BFGS-B", options={"maxiter": 350})
+            opt = minimize(objective, init, method="L-BFGS-B", options={"maxiter": maxiter})
             val = float(opt.fun) if np.isfinite(opt.fun) else 1e12
             if best is None or val < best[0]:
                 best = (val, np.asarray(opt.x, dtype=float))
@@ -469,6 +470,7 @@ def comparer_strategies(
     serie_historique: pd.Series,
     n_paths: int,
     fenetres_calibration: dict[str, pd.Series] | None = None,
+    inclure_markov_skew_t: bool = True,
     seed: int | None = None,
 ) -> tuple[pd.DataFrame, str, dict[str, np.ndarray]]:
     n_periodes = len(serie_historique)
@@ -530,13 +532,6 @@ def comparer_strategies(
         seed=None if seed is None else seed + 4,
     )
 
-    modele_markov_skew_t = ModeleMarkovSwitchingSkewT.calibrer(serie_markov_skew_t)
-    sims_markov_skew_t = modele_markov_skew_t.simuler(
-        n_periodes=n_periodes,
-        n_paths=n_paths,
-        seed=None if seed is None else seed + 7,
-    )
-
     simulations_par_modele = {
         "gaussien_iid": sims_iid,
         "ar1_bruit_colore": sims_ar1,
@@ -545,8 +540,16 @@ def comparer_strategies(
         "skew_t_asymetrique_nu_inf": sims_skew_nu_inf,
         "volatilite_ewma": sims_vol,
         "markov_switching_2_regimes": sims_markov,
-        "markov_switching_2_regimes_skew_t": sims_markov_skew_t,
     }
+
+    if inclure_markov_skew_t:
+        modele_markov_skew_t = ModeleMarkovSwitchingSkewT.calibrer(serie_markov_skew_t)
+        sims_markov_skew_t = modele_markov_skew_t.simuler(
+            n_periodes=n_periodes,
+            n_paths=n_paths,
+            seed=None if seed is None else seed + 7,
+        )
+        simulations_par_modele["markov_switching_2_regimes_skew_t"] = sims_markov_skew_t
 
     lignes: list[dict[str, float | str]] = []
     for nom_modele, sims in simulations_par_modele.items():
@@ -1176,6 +1179,7 @@ def executer_pipeline_univariee(
     colonne_niveau: str,
     dossier_sortie: str,
     n_paths: int = 1000,
+    inclure_markov_skew_t: bool = False,
     seed: int | None = 42,
 ) -> tuple[pd.DataFrame, str, Path]:
     serie = charger_et_preparer_serie(
@@ -1186,6 +1190,7 @@ def executer_pipeline_univariee(
     resultats, meilleur_modele, _ = comparer_strategies(
         serie_historique=serie,
         n_paths=n_paths,
+        inclure_markov_skew_t=inclure_markov_skew_t,
         seed=seed,
     )
     modele_date = "volatilite_ewma"
@@ -1197,7 +1202,7 @@ def executer_pipeline_univariee(
        n_paths=min(n_paths, 120),
        seed=seed,
    )
-    # meilleure_date = pd.Timestamp('1980-01-01')
+    meilleure_date = pd.Timestamp('1980-01-01')
     
     resultats_dates_gauss, meilleure_date_gauss = detecter_date_stable_gaussienne(
         serie_historique=serie,
@@ -1222,6 +1227,7 @@ def executer_pipeline_univariee(
         serie_historique=serie_optimale,
         n_paths=n_paths,
         fenetres_calibration=fenetres_calibration,
+        inclure_markov_skew_t=inclure_markov_skew_t,
         seed=seed,
     )
 
@@ -1238,7 +1244,10 @@ def executer_pipeline_univariee(
         simulations_par_modele=simulations_optimales,
         diagnostic_calibration=diagnostic_calibration,
     )
-    modele_markov_skew_t_resume = ModeleMarkovSwitchingSkewT.calibrer(serie_optimale)
+    section_markov = ""
+    if inclure_markov_skew_t:
+        modele_markov_skew_t_resume = ModeleMarkovSwitchingSkewT.calibrer(serie_optimale)
+        section_markov = _construire_section_markov_skew_t(modele_markov_skew_t_resume)
     rapport_html = construire_html_rapport(
         fig=fig,
         fig_distribution=fig_distribution,
@@ -1251,7 +1260,7 @@ def executer_pipeline_univariee(
         meilleure_date_gauss=meilleure_date_gauss,
         date_fin=pd.Timestamp(serie_optimale.index[-1]),
         diagnostic_calibration=diagnostic_calibration,
-        markov_skew_t_resume_html=_construire_section_markov_skew_t(modele_markov_skew_t_resume),
+        markov_skew_t_resume_html=section_markov,
     )
     figure_path = sortie / "comparaison_fidelite.html"
     figure_path.write_text(rapport_html, encoding="utf-8")
