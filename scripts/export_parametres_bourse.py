@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 import sys
+import pandas as pd
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT / "src"))
@@ -40,6 +41,9 @@ def main() -> None:
         n_paths=120,
         seed=args.seed,
     )
+
+    # meilleure_date = pd.to_datetime("1960-01-01")
+
     fenetre = serie.loc[meilleure_date:]
     modele = ModeleSkewTIID.calibrer(fenetre)
 
