@@ -74,3 +74,31 @@ Sorties générées:
 - tableau des scores de fidélité Monte Carlo,
 - graphique Plotly de comparaison des modèles,
 - conclusion textuelle sur le modèle recommandé.
+
+## Génération standalone — bourse (sortie moteur)
+
+Export des paramètres calibrés (à relancer après nouvelle identification):
+
+```bash
+python scripts/export_parametres_bourse.py
+```
+
+Génération des variations multiplicatives mensuelles pour la bourse:
+
+```python
+from modelisation_macro.bourse import generer_trajectoires_bourse
+
+matrice = generer_trajectoires_bourse(
+    date_debut="2026-01-01",
+    date_fin="2026-12-01",
+    n_monte_carlo=5000,
+    seed=123,
+)
+# matrice.shape == (12, 5000)
+```
+
+Script de test modulaire (format proche d'un appel moteur + rapport HTML Plotly dark):
+
+```bash
+python scripts/test_generation_moteur.py --date-debut 2026-01-01 --date-fin 2030-12-01 --n-monte-carlo 1000 --variables bourse --output-html outputs/test_generation_moteur.html
+```
